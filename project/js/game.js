@@ -479,6 +479,117 @@ class Game {
     }
 
     gameLoop(delta) {
+        // --- Tap-to-move: move fish to targetX (one-time) ---
+        if (this.input.targetX !== null && this.player) {
+            const playerX = this.player.x;
+            const dx = this.input.targetX - playerX;
+            if (Math.abs(dx) > 5) {
+                const direction = dx < 0 ? -1 : 1;
+                this.gameState.playerVelocityX = direction * this.config.playerMaxSpeed;
+            } else {
+                this.gameState.playerVelocityX = 0;
+                this.input.targetX = null;
+            }
+        }
+
+                // --- Swipe up/down for dashing ---
+                if (this.input.keys['swipeUp']) {
+                    // Simulate dash up (with possible horizontal component)
+                    if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+                        const now = Date.now();
+                        if (now - this.gameState.lastDashTime >= this.config.dashCooldown) {
+                            // Calculate dash duration based on swipe distance (capped)
+                            let dashDuration = this.config.dashDuration;
+                            let vx = 0, vy = 0;
+                            if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
+                                const minSwipe = 40; // threshold
+                                const maxSwipe = 400; // max effective swipe
+                                const minDuration = this.config.dashDuration * 0.5;
+                                const maxDuration = this.config.dashDuration * 2.5;
+                                const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
+                                dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
+                                // Calculate angle and set both vx and vy
+                                const dx = this.input.swipeEndX - this.input.swipeStartX;
+                                const dy = this.input.swipeEndY - this.input.swipeStartY;
+                                const angle = Math.atan2(dy, dx);
+                                // Up is negative Y, so invert for dash
+                                const speed = this.config.dashSpeed;
+                                vx = Math.cos(angle) * speed;
+                                vy = Math.sin(angle) * speed;
+                                // Clamp vy to be at least 60% of dashSpeed upward
+                                if (vy > -speed * 0.6) vy = -speed * 0.6;
+                            } else {
+                                vy = -this.config.dashSpeed;
+                            }
+                            this.gameState.isDashing = true;
+                            this.gameState.dashDirection = 'forward';
+                            this.gameState.dashEndTime = now + dashDuration;
+                            this.gameState.lastDashTime = now;
+                            if (this.player) {
+                                this.player.isInvincible = true;
+                                this.player.invincibilityEndTime = 0;
+                                this.gameState.playerVelocityX = vx;
+                                this.gameState.playerVelocityY = vy;
+                            }
+                            this.playRandomSplash();
+                        }
+                    }
+                    this.input.keys['swipeUp'] = false;
+                    this.input.swipeHorizontal = null;
+                    this.input.swipeDistance = null;
+                    this.input.swipeStartX = undefined;
+                    this.input.swipeStartY = undefined;
+                    this.input.swipeEndX = undefined;
+                    this.input.swipeEndY = undefined;
+                }
+                if (this.input.keys['swipeDown']) {
+                    // Simulate dash down (with possible horizontal component)
+                    if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+                        const now = Date.now();
+                        if (now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
+                            // Calculate dash duration based on swipe distance (capped)
+                            let dashDuration = this.config.backDashDuration;
+                            let vx = 0, vy = 0;
+                            if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
+                                const minSwipe = 40;
+                                const maxSwipe = 400;
+                                const minDuration = this.config.backDashDuration * 0.5;
+                                const maxDuration = this.config.backDashDuration * 2.5;
+                                const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
+                                dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
+                                // Calculate angle and set both vx and vy
+                                const dx = this.input.swipeEndX - this.input.swipeStartX;
+                                const dy = this.input.swipeEndY - this.input.swipeStartY;
+                                const angle = Math.atan2(dy, dx);
+                                const speed = this.config.backDashSpeed;
+                                vx = Math.cos(angle) * speed;
+                                vy = Math.sin(angle) * speed;
+                                // Clamp vy to be at least 60% of backDashSpeed downward
+                                if (vy < speed * 0.6) vy = speed * 0.6;
+                            } else {
+                                vy = this.config.backDashSpeed;
+                            }
+                            this.gameState.isDashing = true;
+                            this.gameState.dashDirection = 'backward';
+                            this.gameState.dashEndTime = now + dashDuration;
+                            this.gameState.lastDashTime = now;
+                            if (this.player) {
+                                this.player.isInvincible = true;
+                                this.player.invincibilityEndTime = 0;
+                                this.gameState.playerVelocityX = vx;
+                                this.gameState.playerVelocityY = vy;
+                            }
+                            this.playRandomSplash();
+                        }
+                    }
+                    this.input.keys['swipeDown'] = false;
+                    this.input.swipeHorizontal = null;
+                    this.input.swipeDistance = null;
+                    this.input.swipeStartX = undefined;
+                    this.input.swipeStartY = undefined;
+                    this.input.swipeEndX = undefined;
+                    this.input.swipeEndY = undefined;
+                }
         if (this.gameState.gameOver && !this.gameState.won) return;
 
         // Frame limiting logic
