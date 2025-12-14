@@ -183,10 +183,10 @@ class Waterfall {
     createSplashes(width, height) {
         const splashContainer = new PIXI.Container();
         splashContainer.y = height * 0.88;
-        
+
         const splashes = [];
-        const splashCount = 10; // Reduced from 30 for performance
-        
+        const splashCount = 10;
+
         for (let i = 0; i < splashCount; i++) {
             const splash = {
                 x: (Math.random() - 0.5) * width,
@@ -194,27 +194,37 @@ class Waterfall {
                 particles: [],
                 active: false,
                 timer: Math.random() * 60,
-                burstSize: 3 + Math.random() * 3 // Reduced from 5-13 to 3-6
+                burstSize: 3 + Math.random() * 3
             };
-            
+
             for (let j = 0; j < splash.burstSize; j++) {
-                const particle = new PIXI.Graphics();
-                particle.circle(0, 0, 1 + Math.random() * 2);
-                particle.fill({ color: 0xffffff, alpha: 0.7 });
+                // Use pre-rendered splash textures
+                let texIdx = Math.floor(Math.random() * Waterfall.splashTextures.length);
+                let tex = Waterfall.splashTextures[texIdx];
+                let particle;
+                if (tex) {
+                    particle = new PIXI.Sprite(tex);
+                    particle.anchor.set(0.5);
+                } else {
+                    // fallback
+                    particle = new PIXI.Graphics();
+                    particle.circle(0, 0, 2);
+                    particle.fill({ color: 0xffffff, alpha: 0.7 });
+                }
                 particle.velocityX = (Math.random() - 0.5) * 6;
                 particle.velocityY = -3 - Math.random() * 5;
                 particle.gravity = 0.2;
                 particle.life = 1;
                 particle.fadeSpeed = 0.02 + Math.random() * 0.02;
                 particle.visible = false;
-                
+
                 splashContainer.addChild(particle);
                 splash.particles.push(particle);
             }
-            
+
             splashes.push(splash);
         }
-        
+
         this.container.addChild(splashContainer);
         this.container.splashes = splashes;
     }
@@ -666,4 +676,21 @@ class Waterfall {
             this.debugBox = null;
         }
     }
+
+    // Call this once after PIXI.Application is created
+    static generateSplashTextures(renderer) {
+        Waterfall.splashTextures = [];
+        for (let size = 1; size <= 3; size++) {
+            const g = new PIXI.Graphics();
+            g.circle(0, 0, size + Math.random());
+            g.fill({ color: 0xffffff, alpha: 0.7 });
+            // Use 'linear' string for scaleMode to avoid deprecation warning
+            Waterfall.splashTextures.push(renderer.generateTexture(g, {resolution: 2, scaleMode: 'linear'}));
+        }
+    }
+
 }
+// Static properties (ES5-compatible)
+Waterfall.splashTextures = [];
+Waterfall.FPS = 30;
+Waterfall.DT = 90 / Waterfall.FPS;

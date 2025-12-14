@@ -2,6 +2,29 @@
 // Manages all particle effects, foam, waves, and streaks in the game
 // Requires RiverStreaks to be loaded globally before this script
 class ParticleManager {
+    // Static cache for pre-rendered textures
+    static textures = {};
+    // Call this ONCE after PIXI.Application is created, before any particles are emitted
+    static generateParticleTextures(renderer) {
+        // Splash: white circle, several sizes
+        for (let size = 2; size <= 8; size += 2) {
+            const g = new PIXI.Graphics();
+            g.circle(0, 0, size);
+            g.fill(0xffffff);
+            g.alpha = 1;
+            ParticleManager.textures['splash_' + size] = renderer.generateTexture(g, {resolution: 2, scaleMode: PIXI.SCALE_MODES.LINEAR});
+        }
+        // Foam: ellipse, blueish-white
+        for (let i = 0; i < 4; i++) {
+            const rX = 2.2 + i * 1.5;
+            const rY = 3.5 + i * 2.2;
+            const g = new PIXI.Graphics();
+            g.ellipse(0, 0, rX, rY);
+            g.fill(0xE0F6FF);
+            g.alpha = 1;
+            ParticleManager.textures['foam_' + i] = renderer.generateTexture(g, {resolution: 2, scaleMode: PIXI.SCALE_MODES.LINEAR});
+        }
+    }
     static FPS = 30; // Set the target FPS for particle updates
     static DT = 45 / ParticleManager.FPS;
 
@@ -36,20 +59,27 @@ class ParticleManager {
                 // Position on the ellipse border
                 const spawnX = centerX + Math.cos(angle) * radiusX + (Math.random() - 0.5) * 2.5;
                 const spawnY = centerY + Math.sin(angle) * radiusY + (Math.random() - 0.5) * 2.5;
-
                 // Add some randomness to the outward velocity
                 const speed = 0.32 + Math.random() * 0.22;
                 const vx = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.22;
                 const vy = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.18;
-
-                // Use thicker foam particles for effect
-                const foam = new PIXI.Graphics();
-                const rX = 2.2 + Math.random() * 1.5;
-                const rY = 3.5 + Math.random() * 2.2;
-                foam.ellipse(0, 0, rX, rY);
-                // Give foam a blueish-white tint
-                const color = 0xE0F6FF;
-                foam.fill(color);
+                // Use pre-rendered foam texture
+                const foamIdx = Math.floor(Math.random() * 4);
+                let tex = ParticleManager.textures['foam_' + foamIdx];
+                let foam;
+                if (tex) {
+                    foam = new PIXI.Sprite(tex);
+                    foam.anchor.set(0.5);
+                } else {
+                    // Fallback: draw ellipse directly
+                    foam = new PIXI.Graphics();
+                    foam.ellipse(0, 0, 3, 5);
+                    foam.fill(0xE0F6FF);
+                    if (!ParticleManager._warnedFoam) {
+                        console.warn('Foam texture missing! Using fallback.');
+                        ParticleManager._warnedFoam = true;
+                    }
+                }
                 foam.x = spawnX;
                 foam.y = spawnY;
                 foam.vx = vx;
@@ -139,9 +169,24 @@ class ParticleManager {
                 speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
             }
             const size = minSize + Math.random() * (maxSize - minSize);
-            const particle = new PIXI.Graphics();
-            particle.circle(0, 0, size);
-            particle.fill(color);
+            // Use pre-rendered splash texture closest to size
+            let texSize = Math.round(size / 2) * 2;
+            texSize = Math.max(2, Math.min(8, texSize));
+            let tex = ParticleManager.textures['splash_' + texSize];
+            let particle;
+            if (tex) {
+                particle = new PIXI.Sprite(tex);
+                particle.anchor.set(0.5);
+            } else {
+                // Fallback: draw circle directly
+                particle = new PIXI.Graphics();
+                particle.circle(0, 0, texSize);
+                particle.fill(0xffffff);
+                if (!ParticleManager._warnedSplash) {
+                    console.warn('Splash texture missing! Using fallback.');
+                    ParticleManager._warnedSplash = true;
+                }
+            }
             particle.x = x;
             particle.y = y;
             particle.vx = Math.cos(angle) * speed;
@@ -258,11 +303,11 @@ class ParticleManager {
                 p.scale.x = s;
                 p.scale.y = s;
             }
-            // Optionally shrink the radius for Pixi v8+ Graphics
-            if (p.clear && p.baseSize) {
-                p.clear();
-                p.circle(0, 0, p.baseSize * (0.7 + 0.3 * fade));
-                p.fill(0xffffff);
+            // Optionally scale the sprite for fade
+            if (p.anchor && p.baseSize) {
+                const s = 0.7 + 0.3 * fade;
+                p.scale.x = s;
+                p.scale.y = s;
             }
             if (p.life <= 0) {
                 this.world.removeChild(p);

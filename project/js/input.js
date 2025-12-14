@@ -35,73 +35,97 @@ window.Input = class Input {
         window.removeEventListener('pointerup', this.handlePointerUp);
         window.removeEventListener('pointermove', this.handlePointerMove);
     }
+    // Utility: get fish's screen X (canvas coordinates)
+    getPlayerScreenX() {
+        const game = window.game;
+        if (!game || !game.player || !game.camera) return game && game.player ? game.player.x : 0;
+        // Use camera.worldToScreen for accurate conversion
+        if (typeof game.camera.worldToScreen === 'function') {
+            return game.camera.worldToScreen(game.player.x, game.player.y).x;
+        }
+        // Fallback: center camera horizontally
+        const worldX = game.player.x;
+        const cameraX = game.camera.x || (game.config.width / 2);
+        const screenX = (worldX - cameraX) + (game.config.width / 2);
+        return screenX;
+    }
+
     handlePointerDown(e) {
-        this.swipeStartY = e.clientY;
-        this.swipeStartX = e.clientX;
+        // Always use coordinates relative to the canvas
+        const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        this.swipeStartY = y;
+        this.swipeStartX = x;
         this.pointerMoved = false;
         this.pointerHeld = true;
-        this.pointerX = e.clientX;
+        this.pointerX = x;
         // Set direction for hold-to-move and set virtual key
-        const game = window.game; // assumes global game instance
-        if (game && game.player) {
-            const playerX = game.player.x;
-            if (e.clientX < playerX - 5) {
-                this.pointerDirection = 'left';
-                this.virtualKey = 'ArrowLeft';
-                this.keys['ArrowLeft'] = true;
-            } else if (e.clientX > playerX + 5) {
-                this.pointerDirection = 'right';
-                this.virtualKey = 'ArrowRight';
-                this.keys['ArrowRight'] = true;
-            } else {
-                this.pointerDirection = null;
-                this.virtualKey = null;
-            }
+        const playerScreenX = this.getPlayerScreenX();
+        if (x < playerScreenX - 5) {
+            this.pointerDirection = 'left';
+            this.virtualKey = 'ArrowLeft';
+            this.keys['ArrowLeft'] = true;
+        } else if (x > playerScreenX + 5) {
+            this.pointerDirection = 'right';
+            this.virtualKey = 'ArrowRight';
+            this.keys['ArrowRight'] = true;
+        } else {
+            this.pointerDirection = null;
+            this.virtualKey = null;
         }
     }
 
     handlePointerMove(e) {
+        // Always use coordinates relative to the canvas
+        const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
         if (this.pointerHeld) {
-            this.pointerX = e.clientX;
+            this.pointerX = x;
             // Update direction and virtual key if pointer moves past player
-            const game = window.game;
-            if (game && game.player) {
-                const playerX = game.player.x;
-                if (e.clientX < playerX - 5) {
-                    if (this.pointerDirection !== 'left') {
-                        this.pointerDirection = 'left';
-                        if (this.virtualKey) this.keys[this.virtualKey] = false;
-                        this.virtualKey = 'ArrowLeft';
-                        this.keys['ArrowLeft'] = true;
-                    }
-                } else if (e.clientX > playerX + 5) {
-                    if (this.pointerDirection !== 'right') {
-                        this.pointerDirection = 'right';
-                        if (this.virtualKey) this.keys[this.virtualKey] = false;
-                        this.virtualKey = 'ArrowRight';
-                        this.keys['ArrowRight'] = true;
-                    }
-                } else {
+            const playerScreenX = this.getPlayerScreenX();
+            if (x < playerScreenX - 5) {
+                if (this.pointerDirection !== 'left') {
+                    this.pointerDirection = 'left';
                     if (this.virtualKey) this.keys[this.virtualKey] = false;
-                    this.pointerDirection = null;
-                    this.virtualKey = null;
+                    this.virtualKey = 'ArrowLeft';
+                    this.keys['ArrowLeft'] = true;
                 }
+            } else if (x > playerScreenX + 5) {
+                if (this.pointerDirection !== 'right') {
+                    this.pointerDirection = 'right';
+                    if (this.virtualKey) this.keys[this.virtualKey] = false;
+                    this.virtualKey = 'ArrowRight';
+                    this.keys['ArrowRight'] = true;
+                }
+            } else {
+                if (this.virtualKey) this.keys[this.virtualKey] = false;
+                this.pointerDirection = null;
+                this.virtualKey = null;
             }
         }
-        if (this.swipeStartY !== null && (Math.abs(e.clientY - this.swipeStartY) > this.swipeThreshold)) {
+        if (this.swipeStartY !== null && (Math.abs(y - this.swipeStartY) > this.swipeThreshold)) {
             this.pointerMoved = true;
         }
     }
 
     handlePointerUp(e) {
+        // Always use coordinates relative to the canvas
+        const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
         // Tap: minimal movement, treat as tap-to-move
         if (this.swipeStartY !== null && !this.pointerMoved) {
-            this.targetX = e.clientX;
+            this.targetX = x;
         }
         // Swipe up/down (may also have horizontal component)
         else if (this.swipeStartY !== null && this.pointerMoved) {
-            const dy = e.clientY - this.swipeStartY;
-            const dx = e.clientX - this.swipeStartX;
+            const dy = y - this.swipeStartY;
+            const dx = x - this.swipeStartX;
             // Diagonal swipe: up+left/right
             if (Math.abs(dy) > this.swipeThreshold) {
                 let horizontal = null;
@@ -114,16 +138,16 @@ window.Input = class Input {
                     this.swipeDistance = Math.sqrt(dx*dx + dy*dy);
                     this.swipeStartX = this.swipeStartX;
                     this.swipeStartY = this.swipeStartY;
-                    this.swipeEndX = e.clientX;
-                    this.swipeEndY = e.clientY;
+                    this.swipeEndX = x;
+                    this.swipeEndY = y;
                 } else if (dy > this.swipeThreshold) {
                     // Swipe down
                     this.keys['swipeDown'] = horizontal || true;
                     this.swipeDistance = Math.sqrt(dx*dx + dy*dy);
                     this.swipeStartX = this.swipeStartX;
                     this.swipeStartY = this.swipeStartY;
-                    this.swipeEndX = e.clientX;
-                    this.swipeEndY = e.clientY;
+                    this.swipeEndX = x;
+                    this.swipeEndY = y;
                 }
                 this.swipeHorizontal = horizontal; // Store for game.js
             }

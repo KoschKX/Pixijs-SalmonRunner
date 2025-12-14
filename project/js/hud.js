@@ -116,7 +116,33 @@ class HUD {
         
         this.healthElement.textContent = heartDisplay.trim();
         this.healthElement.style.fontSize = '2em'; // Larger heart icons
-        this.distanceElement.textContent = distance;
+        // Clamp display to goal if close enough
+        let displayDistance = distance;
+        if (window.game && window.game.config && typeof window.game.config.goalDistance === 'number') {
+            // Clamp if romantic sequence is active or game is won
+            if ((window.game.gameState && window.game.gameState.romanticSceneActive) || (window.game.gameState && window.game.gameState.won)) {
+                displayDistance = window.game.config.goalDistance;
+            } else {
+                const player = window.game.player;
+                const goalY = -(window.game.config.goalDistance * 10);
+                let playerY = null;
+                if (player) {
+                    if (typeof player.getPosition === 'function') {
+                        playerY = player.getPosition().y;
+                    } else if (typeof player.y === 'number') {
+                        playerY = player.y;
+                    }
+                }
+                // Clamp if within 30px of goal or within 1 unit of goal distance
+                if (
+                    (playerY !== null && Math.abs(playerY - goalY) < 30) ||
+                    (Math.abs(distance - window.game.config.goalDistance) <= 1)
+                ) {
+                    displayDistance = window.game.config.goalDistance;
+                }
+            }
+        }
+        this.distanceElement.textContent = displayDistance;
     }
     
     showPreloader() {

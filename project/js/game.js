@@ -279,6 +279,28 @@ class Game {
     }
     // Set up and start the game
     async init() {
+        // Create Pixi Application if needed
+        if (!this.app) {
+            this.app = new PIXI.Application();
+            await this.app.init({
+                canvas: this.canvas,
+                width: this.config.width,
+                height: this.config.height,
+                backgroundColor: this.config.backgroundColor,
+                targetFrameRate: 60,
+                clearBeforeRender: true,
+                antialias: false
+            });
+        }
+
+        // Generate pre-rendered particle textures after app is created and initialized
+        if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
+            ParticleManager.generateParticleTextures(this.app.renderer);
+        }
+        // Generate pre-rendered waterfall splash textures
+        if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
+            Waterfall.generateSplashTextures(this.app.renderer);
+        }
         // Reset all game state values
         this.gameState = {
             health: 100,
@@ -869,16 +891,32 @@ class Game {
             this.fadeOverlay.y = -this.world.y;
         }
 
+
         // Always check river bank collision, even during romantic scene
         if (!this.gameState.won) {
             this.river.checkBankCollision(this.player, this.gameState.isDashing, this.gameState);
         }
 
+        // Update distance and trigger romantic sequence if goal reached
         if (!this.gameState.won) {
             // Guard against NaN distance
             const startY = (typeof this.gameState.startY === 'number') ? this.gameState.startY : playerPos.y;
             const distanceTraveled = startY - playerPos.y;
-            this.gameState.distance = Number.isFinite(distanceTraveled) ? Math.max(0, Math.floor(distanceTraveled / 10)) : 0;
+            this.gameState.distance = Number.isFinite(distanceTraveled) ? Math.max(0, Math.round(distanceTraveled / 10)) : 0;
+
+            // Trigger romantic sequence when goal distance is reached
+            // Allow a small margin for rounding issues and Y position
+            const goalY = -(this.config.goalDistance * 10);
+            const yMargin = 20; // pixels
+            if (
+                (this.gameState.distance >= this.config.goalDistance - 2 || Math.abs(playerPos.y - goalY) < yMargin) &&
+                !this.gameState.romanticSceneActive &&
+                this.romanticSequence && typeof this.romanticSequence.start === 'function'
+            ) {
+                const goal = this.world.getChildByLabel && this.world.getChildByLabel('goal');
+                this.gameState.romanticSceneActive = true;
+                this.romanticSequence.start(goal, playerPos);
+            }
         }
 
         // Update river banks (throttled to every 3rd frame)
