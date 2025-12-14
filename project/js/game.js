@@ -1611,7 +1611,6 @@ window.onload = async () => {
     preloader.add('json', 'assets/bird_glide_hbox.json', 'bird_glide_hbox');
     preloader.add('json', 'assets/bird_flap_hbox.json', 'bird_flap_hbox');
     preloader.add('json', 'assets/stones_hbox.json', 'stones_hbox');
-    preloader.add('json', 'assets/salmon_hbox.json', 'salmon_hbox');
     preloader.add('audio', 'assets/audio/splash_A.mp3', 'splash_A');
     preloader.add('audio', 'assets/audio/splash_B.mp3', 'splash_B');
     preloader.add('audio', 'assets/audio/splash_C.mp3', 'splash_C');
