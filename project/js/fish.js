@@ -51,8 +51,9 @@ class Fish extends Sprite {
         const textureSize = 512;
         const meshToTextureScale = fishSize / textureSize;
         
-        // Store hitbox data for each animation frame
-        this.hitboxFrames = hitboxData.frames.map(frameData => {
+        // Only use the first 11 frames for animation and hitbox
+        const maxFrames = 11;
+        this.hitboxFrames = hitboxData.frames.slice(0, maxFrames).map(frameData => {
             const hbox = frameData[0];
             return {
                 x: (hbox.x - textureSize / 2) * meshToTextureScale,
@@ -61,14 +62,11 @@ class Fish extends Sprite {
                 height: hbox.height * meshToTextureScale
             };
         });
-        
         // Set initial hitbox using base class
         this.setHitbox(this.hitboxFrames[0], this.meshScale);
-        
         // Create texture for each frame (horizontal spritesheet)
-        const frameCount = hitboxData.frames.length;
-        const frameWidth = source.width / frameCount;
-        
+        const frameCount = Math.min(hitboxData.frames.length, maxFrames);
+        const frameWidth = source.width / maxFrames;
         for (let i = 0; i < frameCount; i++) {
             const rect = new PIXI.Rectangle(i * frameWidth, 0, frameWidth, source.height);
             this.animationFrames.push(new PIXI.Texture({ source: source, frame: rect }));
@@ -315,11 +313,11 @@ class Fish extends Sprite {
         const hitboxResponse = await fetch('assets/salmon_idle_hbox.json');
         const hitboxData = await hitboxResponse.json();
         
-        // Create texture for each frame
-        const frameCount = hitboxData.frames.length;
-        const frameWidth = source.width / frameCount;
+        // Only use the first 11 frames for animation
+        const maxFrames = 11;
+        const frameCount = Math.min(hitboxData.frames.length, maxFrames);
+        const frameWidth = source.width / maxFrames;
         const animationFrames = [];
-        
         for (let i = 0; i < frameCount; i++) {
             const rect = new PIXI.Rectangle(i * frameWidth, 0, frameWidth, source.height);
             animationFrames.push(new PIXI.Texture({ source: source, frame: rect }));

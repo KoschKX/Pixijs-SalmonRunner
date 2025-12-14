@@ -1712,7 +1712,6 @@ window.onload = async () => {
     window.preloader = preloader;
     preloader.add('texture', 'assets/riverbed_B.jpg', 'riverbedTex');
     preloader.add('texture', 'assets/riverfoliage.png', 'foliageTex');
-    preloader.add('texture', 'assets/salmon.png', 'salmon');
     preloader.add('texture', 'assets/bear_walk.png', 'bear_walk');
     preloader.add('texture', 'assets/bear_eat.png', 'bear_eat');
     preloader.add('texture', 'assets/stones.png', 'stones');
