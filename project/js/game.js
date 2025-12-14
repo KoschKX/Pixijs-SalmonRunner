@@ -1,5 +1,6 @@
 // game.js
 // Main Game class: handles initialization, game loop, and cleanup
+// Input class is loaded globally via <script> in index.html
 let romanticSequence = null;
 class Game {
     constructor(canvas) {
@@ -81,8 +82,8 @@ class Game {
         // RomanticSequence instance
         this.romanticSequence = new window.RomanticSequence(this);
 
-        // Input state
-        this.keys = {};
+        // Input handler
+        this.input = new Input();
 
         // Hitbox data
         this.bearWalkHitboxData = null;
@@ -108,8 +109,7 @@ class Game {
 
         // Bind methods to this instance
         this.gameLoop = this.gameLoop.bind(this);
-        this.handleKeyDown = this.handleKeyDown.bind(this);
-        this.handleKeyUp = this.handleKeyUp.bind(this);
+        // Remove old key event bindings
     }
 
 
@@ -249,149 +249,10 @@ class Game {
     }
 
     setupControls() {
-        window.addEventListener('keydown', this.handleKeyDown);
-        window.addEventListener('keyup', this.handleKeyUp);
+        this.input.setup();
     }
 
-    handleKeyDown(e) {
-        this.keys[e.key] = true;
-
-        // Prevent repeated dashing if key is held down
-        if (e.repeat) return;
-
-        // Toggle debug mode with Tab key
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            this.gameState.debugMode = !this.gameState.debugMode;
-            this.river.setDebugMode(this.gameState.debugMode);
-            if (this.player && this.player.setDebugMode) this.player.setDebugMode(this.gameState.debugMode);
-            if (Array.isArray(this.obstacles)) {
-                this.obstacles.forEach(obs => {
-                    if (obs.setDebugMode) obs.setDebugMode(this.gameState.debugMode);
-                });
-            }
-            return;
-        }
-
-        // Reset game with ESC key in debug mode
-        if (e.key === 'Escape' && this.gameState.debugMode) {
-            e.preventDefault();
-            restartGame();
-            return;
-        }
-
-        const now = Date.now();
-
-        // Trigger forward dash on up arrow
-        if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && !this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-            if (now - this.gameState.lastDashTime >= this.config.dashCooldown) {
-                this.gameState.isDashing = true;
-                this.gameState.dashDirection = 'forward';
-                this.gameState.dashEndTime = now + this.config.dashDuration;
-                this.gameState.lastDashTime = now;
-                // Make fish invincible during dash (and clear any damage-timer invincibility)
-                if (this.player) {
-                    this.player.isInvincible = true;
-                    this.player.invincibilityEndTime = 0;
-                }
-                // Play random splash sound
-                this.playRandomSplash();
-            }
-        }
-
-        // Trigger backward dash on down arrow
-        if ((e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') && !this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-            if (now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                this.gameState.isDashing = true;
-                this.gameState.dashDirection = 'backward';
-                this.gameState.dashEndTime = now + this.config.backDashDuration;
-                this.gameState.lastDashTime = now;
-                // Make fish invincible during dash (and clear any damage-timer invincibility)
-                if (this.player) {
-                    this.player.isInvincible = true;
-                    this.player.invincibilityEndTime = 0;
-                }
-                // Play random splash sound
-                this.playRandomSplash();
-            }
-        }
-
-        // Trigger backward dash on down arrow
-        if ((e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') && !this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-            if (now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                this.gameState.isDashing = true;
-                this.gameState.dashDirection = 'backward';
-                this.gameState.dashEndTime = now + this.config.backDashDuration;
-                this.gameState.lastDashTime = now;
-                // Play random splash sound
-                this.playRandomSplash();
-            }
-        }
-
-        // Make dash-break of bounce lockout instant and responsive
-        if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-            if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && this.gameState.bounceLockout) {
-                // Instantly break bounce and dash forward
-                this.gameState.bounceLockout = false;
-                this.gameState.bounceEasing = false;
-                this.gameState.bounceVelocityY = null;
-                this.gameState.bounceVelocityX = null;
-                this.gameState.bounceStartTime = null;
-                this.gameState.bounceDuration = null;
-                this.gameState.bouncePause = null;
-                this.gameState.bounceInitialVelocityY = null;
-                if (this.river && this.river.bounceLockoutTimeout) {
-                    clearTimeout(this.river.bounceLockoutTimeout);
-                    this.river.bounceLockoutTimeout = null;
-                }
-                if (Date.now() - this.gameState.lastDashTime >= this.config.dashCooldown) {
-                    this.gameState.isDashing = true;
-                    this.gameState.dashDirection = 'forward';
-                    this.gameState.dashEndTime = Date.now() + this.config.dashDuration;
-                    this.gameState.lastDashTime = Date.now();
-                    this.gameState.playerVelocityY = -this.config.dashSpeed;
-                    if (this.player) {
-                        this.player.isInvincible = true;
-                        this.player.invincibilityEndTime = 0;
-                    }
-                    this.playRandomSplash();
-                }
-                return;
-            }
-            if ((e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') && this.gameState.bounceLockout) {
-                // Instantly break bounce and dash backward
-                this.gameState.bounceLockout = false;
-                this.gameState.bounceEasing = false;
-                this.gameState.bounceVelocityY = null;
-                this.gameState.bounceVelocityX = null;
-                this.gameState.bounceStartTime = null;
-                this.gameState.bounceDuration = null;
-                this.gameState.bouncePause = null;
-                this.gameState.bounceInitialVelocityY = null;
-                if (this.river && this.river.bounceLockoutTimeout) {
-                    clearTimeout(this.river.bounceLockoutTimeout);
-                    this.river.bounceLockoutTimeout = null;
-                }
-                if (Date.now() - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                    this.gameState.isDashing = true;
-                    this.gameState.dashDirection = 'backward';
-                    this.gameState.dashEndTime = Date.now() + this.config.backDashDuration;
-                    this.gameState.lastDashTime = Date.now();
-                    this.gameState.playerVelocityY = this.config.backDashSpeed;
-                    if (this.player) {
-                        this.player.isInvincible = true;
-                        this.player.invincibilityEndTime = 0;
-                    }
-                    this.playRandomSplash();
-                }
-                return;
-            }
-        }
-    }
-
-    handleKeyUp(e) {
-        this.keys[e.key] = false;
-    }
+    // Input event handlers are now managed by Input class
 
     playRandomSplash() {
         this.audioManager.playRandomSplash();
@@ -561,118 +422,10 @@ class Game {
     }
 
     setupControls() {
-        window.addEventListener('keydown', this.handleKeyDown);
-        window.addEventListener('keyup', this.handleKeyUp);
+        this.input.setup();
     }
 
-    handleKeyDown(e) {
-        this.keys[e.key] = true;
-        if (e.repeat) return;
-
-        // Toggle debug mode with Tab key
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            this.gameState.debugMode = !this.gameState.debugMode;
-            this.river.setDebugMode(this.gameState.debugMode);
-            if (this.player && this.player.setDebugMode) this.player.setDebugMode(this.gameState.debugMode);
-            if (Array.isArray(this.obstacles)) {
-                this.obstacles.forEach(obs => {
-                    if (obs.setDebugMode) obs.setDebugMode(this.gameState.debugMode);
-                });
-            }
-            return;
-        }
-
-        // Reset game with ESC key in debug mode
-        if (e.key === 'Escape' && this.gameState.debugMode) {
-            e.preventDefault();
-            restartGame();
-            return;
-        }
-
-        const now = Date.now();
-
-        // 1. Always prioritize breaking bounce lockout instantly
-        if (!this.gameState.isDashing && !this.gameState.romanticSceneActive && this.gameState.bounceLockout) {
-            let dashKey = null;
-            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dashKey = 'forward';
-            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dashKey = 'backward';
-            if (dashKey) {
-                // Instantly break bounce and dash
-                this.gameState.bounceLockout = false;
-                this.gameState.bounceEasing = false;
-                this.gameState.bounceVelocityY = null;
-                this.gameState.bounceVelocityX = null;
-                this.gameState.bounceStartTime = null;
-                this.gameState.bounceDuration = null;
-                this.gameState.bouncePause = null;
-                this.gameState.bounceInitialVelocityY = null;
-                if (this.river && this.river.bounceLockoutTimeout) {
-                    clearTimeout(this.river.bounceLockoutTimeout);
-                    this.river.bounceLockoutTimeout = null;
-                }
-                // Debug log for instant bounce break
-                if (dashKey === 'forward' && now - this.gameState.lastDashTime >= this.config.dashCooldown) {
-                    this.gameState.isDashing = true;
-                    this.gameState.dashDirection = 'forward';
-                    this.gameState.dashEndTime = now + this.config.dashDuration;
-                    this.gameState.lastDashTime = now;
-                    this.gameState.playerVelocityY = -this.config.dashSpeed;
-                    if (this.player) {
-                        this.player.isInvincible = true;
-                        this.player.invincibilityEndTime = 0;
-                    }
-                    this.playRandomSplash();
-                } else if (dashKey === 'backward' && now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                    this.gameState.isDashing = true;
-                    this.gameState.dashDirection = 'backward';
-                    this.gameState.dashEndTime = now + this.config.backDashDuration;
-                    this.gameState.lastDashTime = now;
-                    this.gameState.playerVelocityY = this.config.backDashSpeed;
-                    if (this.player) {
-                        this.player.isInvincible = true;
-                        this.player.invincibilityEndTime = 0;
-                    }
-                    this.playRandomSplash();
-                }
-                return;
-            }
-        }
-
-        // 2. If not bounce-locked, handle normal dash logic
-        if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-            if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && now - this.gameState.lastDashTime >= this.config.dashCooldown) {
-                this.gameState.isDashing = true;
-                this.gameState.dashDirection = 'forward';
-                this.gameState.dashEndTime = now + this.config.dashDuration;
-                this.gameState.lastDashTime = now;
-                this.gameState.playerVelocityY = -this.config.dashSpeed;
-                if (this.player) {
-                    this.player.isInvincible = true;
-                    this.player.invincibilityEndTime = 0;
-                }
-                this.playRandomSplash();
-                return;
-            }
-            if ((e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') && now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                this.gameState.isDashing = true;
-                this.gameState.dashDirection = 'backward';
-                this.gameState.dashEndTime = now + this.config.backDashDuration;
-                this.gameState.lastDashTime = now;
-                this.gameState.playerVelocityY = this.config.backDashSpeed;
-                if (this.player) {
-                    this.player.isInvincible = true;
-                    this.player.invincibilityEndTime = 0;
-                }
-                this.playRandomSplash();
-                return;
-            }
-        }
-    }
-
-    handleKeyUp(e) {
-        this.keys[e.key] = false;
-    }
+    // Input event handlers are now managed by Input class
 
     playRandomSplash() {
         this.audioManager.playRandomSplash();
@@ -765,9 +518,9 @@ class Game {
             if (this.gameState.isDashing) {
                 let dashKeyHeld = false;
                 if (this.gameState.dashDirection === 'forward') {
-                    dashKeyHeld = this.keys['ArrowUp'] || this.keys['w'] || this.keys['W'];
+                    dashKeyHeld = this.input.keys['ArrowUp'] || this.input.keys['w'] || this.input.keys['W'];
                 } else if (this.gameState.dashDirection === 'backward') {
-                    dashKeyHeld = this.keys['ArrowDown'] || this.keys['s'] || this.keys['S'];
+                    dashKeyHeld = this.input.keys['ArrowDown'] || this.input.keys['s'] || this.input.keys['S'];
                 }
                 if (!dashKeyHeld && !this.gameState.dashShortened) {
                     // Shorten dash duration by 40% if released early (once per dash)
@@ -817,8 +570,8 @@ class Game {
             if (this.gameState.bounceLockout) {
                 // Allow dashing (forward or backward) to break the bounce lockout at any point (easing or pause)
                 let dashDir = null;
-                if ((this.keys['ArrowUp'] || this.keys['w'] || this.keys['W'])) dashDir = 'forward';
-                if ((this.keys['ArrowDown'] || this.keys['s'] || this.keys['S'])) dashDir = 'backward';
+                if ((this.input.keys['ArrowUp'] || this.input.keys['w'] || this.input.keys['W'])) dashDir = 'forward';
+                if ((this.input.keys['ArrowDown'] || this.input.keys['s'] || this.input.keys['S'])) dashDir = 'backward';
                 const now = Date.now();
                 if (dashDir && !this.gameState.isDashing) {
                     // End lockout, easing, and pause immediately if dash is triggered
@@ -869,6 +622,31 @@ class Game {
                     targetVelocityX = this.gameState.playerVelocityX;
                     targetVelocityY = this.gameState.playerVelocityY;
                 }
+            } 
+            // --- Dash key trigger logic outside of bounce lockout ---
+            else if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+                const now = Date.now();
+                if ((this.input.keys['ArrowUp'] || this.input.keys['w'] || this.input.keys['W']) && now - this.gameState.lastDashTime >= this.config.dashCooldown) {
+                    this.gameState.isDashing = true;
+                    this.gameState.dashDirection = 'forward';
+                    this.gameState.dashEndTime = now + this.config.dashDuration;
+                    this.gameState.lastDashTime = now;
+                    if (this.player) {
+                        this.player.isInvincible = true;
+                        this.player.invincibilityEndTime = 0;
+                    }
+                    this.playRandomSplash();
+                } else if ((this.input.keys['ArrowDown'] || this.input.keys['s'] || this.input.keys['S']) && now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
+                    this.gameState.isDashing = true;
+                    this.gameState.dashDirection = 'backward';
+                    this.gameState.dashEndTime = now + this.config.backDashDuration;
+                    this.gameState.lastDashTime = now;
+                    if (this.player) {
+                        this.player.isInvincible = true;
+                        this.player.invincibilityEndTime = 0;
+                    }
+                    this.playRandomSplash();
+                }
             } else {
                 // Dash overrides normal movement
                 if (this.gameState.isDashing) {
@@ -898,9 +676,9 @@ class Game {
                         // NO scale animation for back dash
                         targetVelocityY = this.config.backDashSpeed;
                         // --- Minimal left/right control for back dash ---
-                        if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
+                        if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
                             targetVelocityX = -this.config.playerMaxSpeed * 0.45; // Minimal boost for back dash
-                        } else if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) {
+                        } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                             targetVelocityX = this.config.playerMaxSpeed * 0.45;
                         } else {
                             targetVelocityX = 0;
@@ -910,7 +688,7 @@ class Game {
                         this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * backDashAccel * actualDelta;
                     }
                 } else {
-                    if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
+                    if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
                         targetVelocityX = -this.config.playerMaxSpeed;
 
                         // Play sound only once when key is first pressed
@@ -923,7 +701,7 @@ class Game {
                         this.gameState.leftKeyPlayedSound = false;
                     }
 
-                    if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) {
+                    if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                         targetVelocityX = this.config.playerMaxSpeed;
 
                         // Play sound only once when key is first pressed
@@ -951,9 +729,9 @@ class Game {
                 this.gameState.playerVelocityY *= Math.pow(this.config.playerFriction, actualDelta);
             }
                                         // --- Moderate left/right control during jump ---
-                                        if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['A']) {
+                                        if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
                                             targetVelocityX = -this.config.playerMaxSpeed * 1.35; // Moderate boost
-                                        } else if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['D']) {
+                                        } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                                             targetVelocityX = this.config.playerMaxSpeed * 1.35;
                                         } else {
                                             targetVelocityX = 0;
