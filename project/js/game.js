@@ -861,17 +861,18 @@ class Game {
             } else {
                 this.gameState.playerVelocityY *= Math.pow(this.config.playerFriction, actualDelta);
             }
-                                        // --- Moderate left/right control during jump ---
-                                        if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
-                                            targetVelocityX = -this.config.playerMaxSpeed * 1.35; // Moderate boost
-                                        } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
-                                            targetVelocityX = this.config.playerMaxSpeed * 1.35;
-                                        } else {
-                                            targetVelocityX = 0;
-                                        }
-                                        // Slightly increased acceleration for jump
-                                        var jumpAccel = this.config.playerAcceleration * 1.5;
-                                        this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * jumpAccel * actualDelta;
+            
+            // --- Moderate left/right control during jump ---
+            if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
+                targetVelocityX = -this.config.playerMaxSpeed * 1.35; // Moderate boost
+            } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
+                targetVelocityX = this.config.playerMaxSpeed * 1.35;
+            } else {
+                targetVelocityX = 0;
+            }
+            // Slightly increased acceleration for jump
+            var jumpAccel = this.config.playerAcceleration * 1.5;
+            this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * jumpAccel * actualDelta;
 
             const newX = playerPos.x + this.gameState.playerVelocityX * actualDelta;
             const newY = playerPos.y + this.gameState.playerVelocityY * actualDelta;
@@ -1713,7 +1714,13 @@ window.onload = async () => {
 
     // Hide loading bar, show start button
     document.querySelector('.progress-container').style.display = 'none';
-    document.getElementById('startButton').style.display = 'block';
+    const startBtn = document.getElementById('startButton');
+    startBtn.style.display = 'block';
+    // Block pointer events from propagating to the game when clicking the start button
+    startBtn.addEventListener('pointerdown', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+    });
 
     // Pause game until player starts
     if (game.app && game.app.ticker) game.app.ticker.stop();

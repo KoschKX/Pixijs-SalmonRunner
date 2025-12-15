@@ -165,6 +165,17 @@ window.Input = class Input {
 
     handleKeyDown(e) {
         this.keys[e.key] = true;
+        // Toggle debug mode with Tab key
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (window.game && window.game.gameState) {
+                window.game.gameState.debugMode = !window.game.gameState.debugMode;
+                // console.log('[DEBUG] Debug mode:', window.game.gameState.debugMode);
+                if (window.game.river && typeof window.game.river.setDebugMode === 'function') {
+                    window.game.river.setDebugMode(window.game.gameState.debugMode);
+                }
+            }
+        }
     }
 
     handleKeyUp(e) {
