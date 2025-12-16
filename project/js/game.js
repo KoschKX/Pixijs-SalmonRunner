@@ -821,30 +821,33 @@ class Game {
                         this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * backDashAccel * actualDelta;
                     }
                 } else {
-                    if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
-                        targetVelocityX = -this.config.playerMaxSpeed;
-
-                        // Play sound only once when key is first pressed
-                        if (!this.gameState.leftKeyPlayedSound) {
-                            this.audioManager.playRandomLateralSplash();
-                            this.gameState.leftKeyPlayedSound = true;
+                    // Deadzone: ignore left/right input while dashing (except minimal back dash control)
+                    if (this.gameState.isDashing) {
+                        // For forward/right/left dash, no left/right input allowed
+                        if (this.gameState.dashDirection !== 'backward') {
+                            targetVelocityX = 0;
+                        } else {
+                            // Minimal left/right control for back dash (already handled above)
                         }
                     } else {
-                        // Reset flag when key is released
-                        this.gameState.leftKeyPlayedSound = false;
-                    }
-
-                    if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
-                        targetVelocityX = this.config.playerMaxSpeed;
-
-                        // Play sound only once when key is first pressed
-                        if (!this.gameState.rightKeyPlayedSound) {
-                            this.audioManager.playRandomLateralSplash();
-                            this.gameState.rightKeyPlayedSound = true;
+                        if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
+                            targetVelocityX = -this.config.playerMaxSpeed;
+                            if (!this.gameState.leftKeyPlayedSound) {
+                                this.audioManager.playRandomLateralSplash();
+                                this.gameState.leftKeyPlayedSound = true;
+                            }
+                        } else {
+                            this.gameState.leftKeyPlayedSound = false;
                         }
-                    } else {
-                        // Reset flag when key is released
-                        this.gameState.rightKeyPlayedSound = false;
+                        if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
+                            targetVelocityX = this.config.playerMaxSpeed;
+                            if (!this.gameState.rightKeyPlayedSound) {
+                                this.audioManager.playRandomLateralSplash();
+                                this.gameState.rightKeyPlayedSound = true;
+                            }
+                        } else {
+                            this.gameState.rightKeyPlayedSound = false;
+                        }
                     }
                 }
             }
@@ -874,9 +877,25 @@ class Game {
             var jumpAccel = this.config.playerAcceleration * 1.5;
             this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * jumpAccel * actualDelta;
 
-            const newX = playerPos.x + this.gameState.playerVelocityX * actualDelta;
-            const newY = playerPos.y + this.gameState.playerVelocityY * actualDelta;
+            let newX = playerPos.x + this.gameState.playerVelocityX * actualDelta;
+
+            let newY = playerPos.y + this.gameState.playerVelocityY * actualDelta;
+
+            // Clamp X so fish cannot move past pointer while dragging
+            if (this.input.pointerHeld && typeof this.input.pointerX === 'number') {
+                // Only clamp if moving toward pointer and would cross it
+                if ((this.gameState.playerVelocityX > 0 && newX > this.input.pointerX && playerPos.x <= this.input.pointerX) ||
+                    (this.gameState.playerVelocityX < 0 && newX < this.input.pointerX && playerPos.x >= this.input.pointerX)) {
+                    newX = this.input.pointerX;
+                    this.gameState.playerVelocityX = 0;
+                }
+            }
             this.player.setPosition(newX, newY);
+
+            // --- HARD DEADZONE: forcibly zero velocity if no input and velocity is small ---
+            if (!(this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A'] || this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) && Math.abs(this.gameState.playerVelocityX) < 0.2) {
+                this.gameState.playerVelocityX = 0;
+            }
 
             playerPos = this.player.getPosition();
 
@@ -1025,15 +1044,23 @@ class Game {
                 if (this.player.isInvincible) {
                     continue;
                 }
-                // Only skip collision with rocks and bears if dashing (forward or backward)
-                if ((this.player.isJumping || this.gameState.isDashing || this.gameState.romanticSceneActive)
-                    && (obstacle.type === 'stone' || obstacle.type === 'waterfall' || obstacle instanceof Bear)) {
+                // Only skip collision with waterfalls and bears during romantic scene or dashing
+                if ((this.gameState.romanticSceneActive)
+                    && (obstacle.type === 'waterfall' || obstacle instanceof Bear)) {
                     continue;
                 }
 
                 // --- Fast collision logic ---
                 let collided = false;
+                // Skip ALL stone collision and knockback/damage if jumping or dashing forward
+                if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
+                    continue;
+                }
                 if (obstacle instanceof Stone) {
+                    // Extra guard: skip all stone collision/knockback if jumping or dashing forward
+                    if (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward')) {
+                        continue;
+                    }
                     // Only get hitboxes if needed
                     const playerBox = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const stoneBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
@@ -1131,6 +1158,10 @@ class Game {
                 }
 
                 if (collided) {
+                    // Skip stone knockback/damage if jumping or dashing forward
+                    if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
+                        continue;
+                    }
                     // Smooth collision response for stones
                     if (obstacle instanceof Stone) {
                         // Only get hitboxes if needed

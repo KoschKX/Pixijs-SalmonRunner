@@ -6,11 +6,8 @@ window.Input = class Input {
         this.handleKeyDown = this.handleKeyDown.bind(this);
         this.handleKeyUp = this.handleKeyUp.bind(this);
         // Touch/tap and swipe state
-        this.targetX = null; // X coordinate to move fish to
         this.pointerHeld = false; // Is pointer pressed/held
         this.pointerX = null; // Current pointer X while held
-        this.pointerDirection = null; // 'left' or 'right' while held
-        this.virtualKey = null; // 'ArrowLeft' or 'ArrowRight' for mouse/touch
         this.swipeStartY = null;
         this.swipeStartX = null;
         this.swipeThreshold = 40; // Minimum px for swipe
@@ -51,89 +48,91 @@ window.Input = class Input {
     }
 
     handlePointerDown(e) {
+        // Always clear both keys before setting a new direction
+        this.keys['ArrowLeft'] = false;
+        this.keys['ArrowRight'] = false;
         // Always use coordinates relative to the canvas
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
-        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0,width:1,height:1};
+        let pointerX, pointerY;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            pointerX = e.changedTouches[0].pageX;
+            pointerY = e.changedTouches[0].pageY;
+        } else {
+            pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
+            pointerY = (typeof e.pageY === 'number') ? e.pageY : e.clientY;
+        }
+        let x = ((pointerX - rect.left) / rect.width) * canvas.width;
+        let y = ((pointerY - rect.top) / rect.height) * canvas.height;
         this.swipeStartY = y;
         this.swipeStartX = x;
         this.pointerMoved = false;
         this.pointerHeld = true;
         this.pointerX = x;
-        // Set direction for hold-to-move and set virtual key
+        // Set left/right key only if pointer is far enough from fish (deadzone)
         const playerScreenX = this.getPlayerScreenX();
-        if (x < playerScreenX - 5) {
-            this.pointerDirection = 'left';
-            this.virtualKey = 'ArrowLeft';
+        const deadzone = 20;
+        if (x < playerScreenX - deadzone) {
             this.keys['ArrowLeft'] = true;
-        } else if (x > playerScreenX + 5) {
-            this.pointerDirection = 'right';
-            this.virtualKey = 'ArrowRight';
+        } else if (x > playerScreenX + deadzone) {
             this.keys['ArrowRight'] = true;
-        } else {
-            this.pointerDirection = null;
-            this.virtualKey = null;
         }
     }
 
     handlePointerMove(e) {
-        // Always use coordinates relative to the canvas
+        if (!this.pointerHeld) return;
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
-        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-        if (this.pointerHeld) {
-            this.pointerX = x;
-            // Update direction and virtual key if pointer moves past player
-            const playerScreenX = this.getPlayerScreenX();
-            if (x < playerScreenX - 5) {
-                if (this.pointerDirection !== 'left') {
-                    this.pointerDirection = 'left';
-                    if (this.virtualKey) this.keys[this.virtualKey] = false;
-                    this.virtualKey = 'ArrowLeft';
-                    this.keys['ArrowLeft'] = true;
-                }
-            } else if (x > playerScreenX + 5) {
-                if (this.pointerDirection !== 'right') {
-                    this.pointerDirection = 'right';
-                    if (this.virtualKey) this.keys[this.virtualKey] = false;
-                    this.virtualKey = 'ArrowRight';
-                    this.keys['ArrowRight'] = true;
-                }
-            } else {
-                if (this.virtualKey) this.keys[this.virtualKey] = false;
-                this.pointerDirection = null;
-                this.virtualKey = null;
-            }
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0,width:1,height:1};
+        // Use changedTouches[0] for touch, pageX/clientX for mouse
+        let pointerX, pointerY;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            pointerX = e.changedTouches[0].pageX;
+            pointerY = e.changedTouches[0].pageY;
+        } else {
+            pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
+            pointerY = (typeof e.pageY === 'number') ? e.pageY : e.clientY;
         }
+        let x = ((pointerX - rect.left) / rect.width) * canvas.width;
+        this.pointerX = x;
+        this.keys['ArrowLeft'] = false;
+        this.keys['ArrowRight'] = false;
+        const playerScreenX = this.getPlayerScreenX();
+        const deadzone = 20;
+        // Only move toward the pointer, and stop at the pointer position
+        if (x < playerScreenX - deadzone) {
+            this.keys['ArrowLeft'] = true;
+        } else if (x > playerScreenX + deadzone) {
+            this.keys['ArrowRight'] = true;
+        }
+        // Prevent moving past the pointer: if fish is left of pointer and moving right, or right of pointer and moving left, stop
+        if ((this.keys['ArrowLeft'] && playerScreenX <= x) || (this.keys['ArrowRight'] && playerScreenX >= x)) {
+            this.keys['ArrowLeft'] = false;
+            this.keys['ArrowRight'] = false;
+        }
+        // Swipe detection for dash
+        let y = ((e.clientY - rect.top) / rect.height) * canvas.height;
         if (this.swipeStartY !== null && (Math.abs(y - this.swipeStartY) > this.swipeThreshold)) {
             this.pointerMoved = true;
         }
     }
 
     handlePointerUp(e) {
-        // Always use coordinates relative to the canvas
+        // Only handle dash swipe up/down, not tap-to-move
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
-        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0};
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-        // Tap: minimal movement, treat as tap-to-move
-        if (this.swipeStartY !== null && !this.pointerMoved) {
-            this.targetX = x;
-        }
-        // Swipe up/down (may also have horizontal component)
-        else if (this.swipeStartY !== null && this.pointerMoved) {
+        let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0,width:1,height:1};
+        let pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
+        let pointerY = (typeof e.pageY === 'number') ? e.pageY : e.clientY;
+        let x = ((pointerX - rect.left) / rect.width) * canvas.width;
+        let y = ((pointerY - rect.top) / rect.height) * canvas.height;
+        if (this.swipeStartY !== null && this.pointerMoved) {
             const dy = y - this.swipeStartY;
             const dx = x - this.swipeStartX;
-            // Diagonal swipe: up+left/right
             if (Math.abs(dy) > this.swipeThreshold) {
                 let horizontal = null;
                 if (Math.abs(dx) > 20) {
                     horizontal = dx > 0 ? 'right' : 'left';
                 }
                 if (dy < -this.swipeThreshold) {
-                    // Swipe up (possibly diagonal)
                     this.keys['swipeUp'] = horizontal || true;
                     this.swipeDistance = Math.sqrt(dx*dx + dy*dy);
                     this.swipeStartX = this.swipeStartX;
@@ -141,7 +140,6 @@ window.Input = class Input {
                     this.swipeEndX = x;
                     this.swipeEndY = y;
                 } else if (dy > this.swipeThreshold) {
-                    // Swipe down
                     this.keys['swipeDown'] = horizontal || true;
                     this.swipeDistance = Math.sqrt(dx*dx + dy*dy);
                     this.swipeStartX = this.swipeStartX;
@@ -149,7 +147,7 @@ window.Input = class Input {
                     this.swipeEndX = x;
                     this.swipeEndY = y;
                 }
-                this.swipeHorizontal = horizontal; // Store for game.js
+                this.swipeHorizontal = horizontal;
             }
         }
         this.swipeStartY = null;
@@ -157,10 +155,8 @@ window.Input = class Input {
         this.pointerMoved = false;
         this.pointerHeld = false;
         this.pointerX = null;
-        if (this.virtualKey) this.keys[this.virtualKey] = false;
-        this.pointerDirection = null;
-        this.virtualKey = null;
-        // Clear swipeDistance after dash is triggered in game.js
+        this.keys['ArrowLeft'] = false;
+        this.keys['ArrowRight'] = false;
     }
 
     handleKeyDown(e) {

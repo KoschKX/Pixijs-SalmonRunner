@@ -142,13 +142,15 @@ class Sprite extends PIXI.Container {
     }
 
     checkCollision(player) {
+        // Skip all collision/knockback if player is jumping or dashing forward
+        if (player.isJumping || (player.gameState && player.gameState.isDashing && player.gameState.dashDirection === 'forward')) {
+            return;
+        }
         const playerPos = player.getPosition();
-        
         // Check collision with player
         const dx = playerPos.x - this.container.x;
         const dy = playerPos.y - this.container.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
         if (distance < this.container.collisionRadius + 20) {
             // Push player away from stone
             const angle = Math.atan2(dy, dx);
