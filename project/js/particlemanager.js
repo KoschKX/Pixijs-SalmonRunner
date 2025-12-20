@@ -2,27 +2,33 @@
 // Manages all particle effects, foam, waves, and streaks in the game
 // Requires RiverStreaks to be loaded globally before this script
 class ParticleManager {
+            // For rate-limited debug logging
+            static lastSummaryLog = 0;
+        // Maximum number of particles and foam allowed (lower on mobile)
+        static getMaxParticles() {
+            if (window.game && window.game.mobileMode) return 80;
+            return 180;
+        }
+        static getMaxFoam() {
+            if (window.game && window.game.mobileMode) return 32;
+            return 64;
+        }
     // Static cache for pre-rendered textures
     static textures = {};
     // Call this ONCE after PIXI.Application is created, before any particles are emitted
     static generateParticleTextures(renderer) {
-        // Splash: white circle, several sizes
-        for (let size = 2; size <= 8; size += 2) {
-            const g = new PIXI.Graphics();
-            g.circle(0, 0, size);
-            g.fill(0xffffff);
-            g.alpha = 1;
-            ParticleManager.textures['splash_' + size] = renderer.generateTexture(g, {resolution: 2, scaleMode: PIXI.SCALE_MODES.LINEAR});
-        }
-        // Foam: ellipse, blueish-white
-        for (let i = 0; i < 4; i++) {
-            const rX = 2.2 + i * 1.5;
-            const rY = 3.5 + i * 2.2;
-            const g = new PIXI.Graphics();
-            g.ellipse(0, 0, rX, rY);
-            g.fill(0xE0F6FF);
-            g.alpha = 1;
-            ParticleManager.textures['foam_' + i] = renderer.generateTexture(g, {resolution: 2, scaleMode: PIXI.SCALE_MODES.LINEAR});
+        // Use textures from the loaded spritesheet atlas (preloadedResources.particleFrames)
+        const foamKeys = ['foam_0', 'foam_1', 'foam_2', 'foam_3', 'foam_4', 'foam_6', 'foam_8'];
+        const splashKeys = ['splash_2', 'splash_4', 'splash_6', 'splash_8'];
+        if (window.preloadedResources && window.preloadedResources.particleFrames) {
+            [...foamKeys, ...splashKeys].forEach(key => {
+                const tex = window.preloadedResources.particleFrames[key];
+                if (tex && tex.source && tex.source.width > 0 && tex.source.height > 0) {
+                    ParticleManager.textures[key] = tex;
+                }
+            });
+            // Additional check: log if no textures loaded
+            const loadedKeys = Object.keys(ParticleManager.textures);
         }
     }
     static FPS = 30; // Set the target FPS for particle updates
@@ -63,23 +69,24 @@ class ParticleManager {
                 const speed = 0.32 + Math.random() * 0.22;
                 const vx = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.22;
                 const vy = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.18;
-                // Use pre-rendered foam texture
-                const foamIdx = Math.floor(Math.random() * 4);
-                let tex = ParticleManager.textures['foam_' + foamIdx];
-                let foam;
-                if (tex) {
-                    foam = new PIXI.Sprite(tex);
-                    foam.anchor.set(0.5);
-                } else {
-                    // Fallback: draw ellipse directly
-                    foam = new PIXI.Graphics();
-                    foam.ellipse(0, 0, 3, 5);
-                    foam.fill(0xE0F6FF);
-                    if (!ParticleManager._warnedFoam) {
-                        console.warn('Foam texture missing! Using fallback.');
-                        ParticleManager._warnedFoam = true;
+                    // Pick foam texture index inside the loop
+                    const foamIndices = [0, 1, 2, 3, 4, 6, 8];
+                    const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
+                    let tex = ParticleManager.textures['foam_' + foamIdx];
+                    let foam;
+                    // PixiJS v8+ texture validity: check source width/height
+                    const isValid = tex && (
+                        (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
+                        (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
+                    );
+                    if (isValid) {
+                        foam = new PIXI.Sprite(tex);
+                        foam.anchor.set(0.5);
+                    } else {
+                        foam = new PIXI.Graphics();
+                        foam.ellipse(0, 0, 5, 8);
+                        foam.fill(0x3399ff); // Blue fallback for foam
                     }
-                }
                 foam.x = spawnX;
                 foam.y = spawnY;
                 foam.vx = vx;
@@ -113,16 +120,48 @@ class ParticleManager {
         this.foam = [];
         this.waveContainers = [];
         this.riverStreaks = new RiverStreaks(world, config, getRiverPathAtY);
+        // ParticleContainer for batching foam and splash particles
+        this.pixiParticleContainer = new PIXI.Container();
+        this.pixiParticleContainer.zIndex = 8;
+        this.world.addChild(this.pixiParticleContainer);
+        this.pixiParticleContainer.x = 0;
+        this.pixiParticleContainer.y = 0;
+        // (Debug visuals removed)
     }
     addFoam(foam) {
+        // Limit foam count
+        if (this.foam.length >= ParticleManager.getMaxFoam()) {
+            // Remove the oldest foam
+            const old = this.foam.shift();
+            if (old) {
+                if (old instanceof PIXI.Sprite) {
+                    this.pixiParticleContainer.removeChild(old);
+                } else {
+                    this.world.removeChild(old);
+                }
+            }
+        }
         this.foam.push(foam);
-        this.world.addChild(foam);
+        if (foam instanceof PIXI.Sprite) {
+            // PixiJS v8+ texture validity: check source/baseTexture width/height
+            if (!foam.texture ||
+                !((foam.texture.source && foam.texture.source.width > 0 && foam.texture.source.height > 0) ||
+                  (foam.texture.baseTexture && foam.texture.baseTexture.width > 0 && foam.texture.baseTexture.height > 0))) {
+            }
+            this.pixiParticleContainer.addChild(foam);
+        } else {
+            this.world.addChild(foam);
+        }
     }
 
     removeFoam(foam) {
         const idx = this.foam.indexOf(foam);
         if (idx !== -1) this.foam.splice(idx, 1);
-        this.world.removeChild(foam);
+        if (foam instanceof PIXI.Sprite) {
+            this.pixiParticleContainer.removeChild(foam);
+        } else {
+            this.world.removeChild(foam);
+        }
     }
 
     addWaveContainer(wave) {
@@ -157,7 +196,20 @@ class ParticleManager {
         const color = options.color !== undefined ? options.color : 0xffffff;
         const upwardSpray = options.upwardSpray || false;
         const lifetime = options.lifetime || 38;
+        // Limit total particles
+        const maxParticles = ParticleManager.getMaxParticles();
         for (let i = 0; i < count; i++) {
+            if (this.particles.length >= maxParticles) {
+                // Remove the oldest particle
+                const old = this.particles.shift();
+                if (old) {
+                    if (old instanceof PIXI.Sprite) {
+                        this.pixiParticleContainer.removeChild(old);
+                    } else {
+                        this.world.removeChild(old);
+                    }
+                }
+            }
             let angle, speed;
             if (upwardSpray) {
                 // Emit particles in a narrow upward arc
@@ -169,26 +221,36 @@ class ParticleManager {
                 speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
             }
             const size = minSize + Math.random() * (maxSize - minSize);
-            // Use pre-rendered splash texture closest to size
+            // Use preloaded splash PNG texture closest to size
             let texSize = Math.round(size / 2) * 2;
             texSize = Math.max(2, Math.min(8, texSize));
             let tex = ParticleManager.textures['splash_' + texSize];
             let particle;
-            if (tex) {
-                particle = new PIXI.Sprite(tex);
-                particle.anchor.set(0.5);
+            let useFallback = false;
+            // PixiJS v8+ texture validity: check source/baseTexture width/height
+            const isValid = tex && (
+                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
+                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
+            );
+                        if (isValid) {
+                                particle = new PIXI.Sprite(tex);
+                                particle.anchor.set(0.5);
+                                particle.x = x;
+                                particle.y = y;
+                                // console.log('[ParticleManager] Created splash sprite with texture:', 'splash_' + texSize);
             } else {
-                // Fallback: draw circle directly
+                useFallback = true;
+            }
+            if (useFallback) {
                 particle = new PIXI.Graphics();
                 particle.circle(0, 0, texSize);
-                particle.fill(0xffffff);
-                if (!ParticleManager._warnedSplash) {
-                    console.warn('Splash texture missing! Using fallback.');
-                    ParticleManager._warnedSplash = true;
-                }
+                particle.fill(0xffee00); // Yellow fallback for splash
+                console.warn('[ParticleManager] Fallback splash shape used at', x, y, 'Texture missing or invalid:', tex);
             }
-            particle.x = x;
-            particle.y = y;
+            if (!(particle instanceof PIXI.Sprite)) {
+                particle.x = x;
+                particle.y = y;
+            }
             particle.vx = Math.cos(angle) * speed;
             particle.vy = Math.sin(angle) * speed;
             particle.alpha = minAlpha + Math.random() * (maxAlpha - minAlpha);
@@ -196,7 +258,16 @@ class ParticleManager {
             particle.maxLife = lifetime;
             particle.baseSize = size;
             this.particles.push(particle);
-            this.world.addChild(particle);
+            if (particle instanceof PIXI.Sprite) {
+                // PixiJS v8+ texture validity: check source/baseTexture width/height
+                if (!particle.texture ||
+                    !((particle.texture.source && particle.texture.source.width > 0 && particle.texture.source.height > 0) ||
+                      (particle.texture.baseTexture && particle.texture.baseTexture.width > 0 && particle.texture.baseTexture.height > 0))) {
+                }
+                this.pixiParticleContainer.addChild(particle);
+            } else {
+                this.world.addChild(particle);
+            }
         }
     }
 
@@ -283,6 +354,36 @@ class ParticleManager {
     }
 
     updateParticles(deltaTime = 1) {
+        // Rate-limited summary log (once per second)
+        const now = performance.now();
+        if (now - ParticleManager.lastSummaryLog > 1000) {
+            ParticleManager.lastSummaryLog = now;
+        }
+        // Move debug follow circle to player/camera center if present
+        if (this._debugFollowCircle && window.game && window.game.player && typeof window.game.player.getPosition === 'function') {
+            const pos = window.game.player.getPosition();
+            this._debugFollowCircle.x = pos.x;
+            this._debugFollowCircle.y = pos.y;
+            // Emit a visible test particle at the player's position every frame
+            if (this.particles.length < ParticleManager.getMaxParticles()) {
+                const testParticle = new PIXI.Graphics();
+                testParticle.circle(0, 0, 16);
+                testParticle.fill({ color: 0xffffff, alpha: 1 });
+                testParticle.x = pos.x;
+                testParticle.y = pos.y;
+                testParticle.vx = 0;
+                testParticle.vy = 0;
+                testParticle.life = 30;
+                testParticle.maxLife = 30;
+                testParticle.zIndex = 9999;
+                this.particles.push(testParticle);
+                this.world.addChild(testParticle);
+            }
+        } else if (this._debugFollowCircle && window.game && window.game.camera && typeof window.game.camera.getPosition === 'function') {
+            const cam = window.game.camera.getPosition();
+            this._debugFollowCircle.x = cam.x;
+            this._debugFollowCircle.y = cam.y;
+        }
         const dt = deltaTime * ParticleManager.DT;
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
@@ -310,16 +411,32 @@ class ParticleManager {
                 p.scale.y = s;
             }
             if (p.life <= 0) {
-                this.world.removeChild(p);
+                if (p instanceof PIXI.Sprite) {
+                    this.pixiParticleContainer.removeChild(p);
+                } else {
+                    this.world.removeChild(p);
+                }
                 this.particles.splice(i, 1);
             }
         }
     }
 
     clear() {
-        this.particles.forEach(p => this.world.removeChild(p));
+        this.particles.forEach(p => {
+            if (p instanceof PIXI.Sprite) {
+                this.pixiParticleContainer.removeChild(p);
+            } else {
+                this.world.removeChild(p);
+            }
+        });
         this.particles = [];
-        this.foam.forEach(f => this.world.removeChild(f));
+        this.foam.forEach(f => {
+            if (f instanceof PIXI.Sprite) {
+                this.pixiParticleContainer.removeChild(f);
+            } else {
+                this.world.removeChild(f);
+            }
+        });
         this.foam = [];
         this.waveContainers.forEach(w => this.world.removeChild(w));
         this.waveContainers = [];

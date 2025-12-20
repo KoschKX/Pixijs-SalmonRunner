@@ -2,7 +2,28 @@
 // Main Game class: handles initialization, game loop, and cleanup
 // Input class is loaded globally via <script> in index.html
 let romanticSequence = null;
+// Ensure the particle spritesheet is preloaded before the game starts
+if (!window.preloader || typeof window.preloader.add !== 'function' || !(window.preloader instanceof Preloader)) {
+    window.preloader = new Preloader();
+}
+window.preloader.add('spritesheet', 'assets/generated/particlesheet.json', 'particlesheet');
+window.preloader.add('spritesheet', 'assets/generated/particlesheet.png', 'particlesheet');
+// Assign preloadedResources globally before any game logic
+if (!window.preloadedResources) {
+    // This will be awaited in preloadResources, but we assign a promise here for early access if needed
+    window.preloadedResources = window.preloader.preloadAll();
+}
+
 class Game {
+        // Detect mobile device (simple user agent check)
+        isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        // Set mobile mode flag
+        setMobileMode() {
+            this.mobileMode = this.isMobileDevice();
+        }
     constructor(canvas) {
         this.canvas = canvas;
 
@@ -279,6 +300,7 @@ class Game {
     }
     // Set up and start the game
     async init() {
+        this.setMobileMode();
         // Create Pixi Application if needed
         if (!this.app) {
             this.app = new PIXI.Application();
@@ -293,9 +315,51 @@ class Game {
             });
         }
 
-        // Generate pre-rendered particle textures after app is created and initialized
+        // Preload all resources (including foam/splash PNGs)
+        await this.preloadResources();
+        // Log preloaded resources and particle frames
+        // console.log('[Game] window.preloadedResources:', window.preloadedResources);
+        if (window.preloadedResources && window.preloadedResources.particleFrames) {
+            // console.log('[Game] Particle frames keys:', Object.keys(window.preloadedResources.particleFrames));
+            const testKey = Object.keys(window.preloadedResources.particleFrames)[0];
+            if (testKey) {
+                const testTex = window.preloadedResources.particleFrames[testKey];
+                // console.log(`[Game] Test particle frame '${testKey}':`, testTex);
+                if (testTex && testTex.source) {
+                    // console.log(`[Game] Test texture source for '${testKey}':`, testTex.source);
+                }
+            }
+        } else {
+            // console.warn('[Game] No particleFrames found in preloadedResources!');
+        }
+
+        // Ensure textures are loaded before creating ParticleManager
+        // FIX: Wait for particle frames to be valid before generating textures
+        function areParticleFramesValid() {
+            const keys = Object.keys(window.preloadedResources.particleFrames || {});
+            return keys.length > 0 && keys.every(k => {
+                const t = window.preloadedResources.particleFrames[k];
+                return t && t.valid;
+            });
+        }
+        async function waitForParticleFramesValid(maxWaitMs = 2000) {
+            const start = Date.now();
+            while (!areParticleFramesValid()) {
+                if (Date.now() - start > maxWaitMs) break;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        await waitForParticleFramesValid();
         if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
             ParticleManager.generateParticleTextures(this.app.renderer);
+            // console.log('[Game] ParticleManager.textures:', ParticleManager.textures);
+            const splashKey = 'splash_2';
+            if (ParticleManager.textures[splashKey]) {
+                // console.log(`[Game] ParticleManager texture '${splashKey}':`, ParticleManager.textures[splashKey]);
+                if (ParticleManager.textures[splashKey].source) {
+                    // console.log(`[Game] ParticleManager texture source for '${splashKey}':`, ParticleManager.textures[splashKey].source);
+                }
+            }
         }
         // Generate pre-rendered waterfall splash textures
         if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
@@ -365,6 +429,7 @@ class Game {
 
         // Render once to avoid blank frames
         this.app.renderer.render(this.app.stage);
+
 
 
 
@@ -939,41 +1004,43 @@ class Game {
             }
         }
 
-        // Update river banks (throttled to every 3rd frame)
-        if (!this.gameState.won && this.frameCounter % 3 === 0) {
+        // Throttle updates more aggressively on mobile
+        const bankSkip = this.mobileMode ? 6 : 3;
+        const waterfallSkip = this.mobileMode ? 4 : 2;
+        const islandSkip = this.mobileMode ? 4 : 2;
+
+        // Update river banks (throttled)
+        if (!this.gameState.won && this.frameCounter % bankSkip === 0) {
             this.river.updateBanks(playerPos);
         }
 
-        // Update background layers
+        // Update background layers (always, but could be throttled if needed)
         if (!this.gameState.won) {
             this.river.updateWaterLayers(playerPos, this.gameState.scrollOffset);
         }
 
-        // Update waterfalls (throttled to every 2nd frame)
-        if (!this.gameState.won && this.frameCounter % 2 === 0) {
+        // Update waterfalls (throttled)
+        if (!this.gameState.won && this.frameCounter % waterfallSkip === 0) {
             const viewBuffer = this.config.height;
             this.river.updateWaterfalls(playerPos, this.config.height, viewBuffer);
         }
 
-        // Update river islands (throttled to every 2nd frame)
-        if (!this.gameState.won && this.frameCounter % 2 === 0) {
+        // Update river islands (throttled)
+        if (!this.gameState.won && this.frameCounter % islandSkip === 0) {
             const viewBuffer = this.config.height;
             this.river.updateIslands(playerPos, this.player, this.config.height, viewBuffer, this.gameState);
         }
 
-        // Update obstacles
+        // Update obstacles with more aggressive culling on mobile
         if (!this.gameState.won) {
-            const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2;
-            const viewBottom = playerPos.y + this.config.height / 2 + this.config.height;
+            // Increase culling buffer on mobile
+            const cullMultiplier = this.mobileMode ? 0.5 : 1;
+            const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2 * cullMultiplier;
+            const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
 
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obstacle = this.obstacles[i];
-                // Force type for PIXI.Sprite/Graphics stones if missing (redundant, but keep for safety)
-                if (!obstacle.type && obstacle.texture && obstacle.texture.baseTexture && obstacle.texture.baseTexture.resource && obstacle.texture.baseTexture.resource.url &&
-                    (obstacle.texture.baseTexture.resource.url.includes('stone') || obstacle.texture.baseTexture.resource.url.includes('rock'))
-                ) {
-                    obstacle.type = 'rock';
-                }
+                // ...existing code...
                 let obstaclePos;
                 if (
                     (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net) && typeof obstacle.getPosition === 'function'
@@ -982,7 +1049,6 @@ class Game {
                 } else if (obstacle instanceof Stone && typeof obstacle.getPosition === 'function') {
                     obstaclePos = obstacle.getPosition();
                 } else if (obstacle.getContainer && obstacle.getContainer().x !== undefined && obstacle.getContainer().y !== undefined) {
-                    // Fallback for Stone or other objects with getContainer
                     obstaclePos = {
                         x: obstacle.getContainer().x,
                         y: obstacle.getContainer().y
@@ -994,16 +1060,16 @@ class Game {
                     };
                 }
 
-                // Skip collision and update for obstacles far off screen
+                // Aggressive culling: skip update for obstacles far off screen
                 const inView = obstaclePos.y >= viewTop && obstaclePos.y <= viewBottom;
-                // Hide obstacles that are out of view
                 let obstacleContainerForVisibility = (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net || obstacle instanceof Stone) ?
                     obstacle.getContainer() :
                     obstacle;
                 if (obstacleContainerForVisibility && obstacleContainerForVisibility.visible !== undefined) {
                     obstacleContainerForVisibility.visible = inView;
                 }
-                if (!inView && !(obstacle instanceof Bear && obstacle.alwaysChase)) {
+                // On mobile, cull even more aggressively
+                if (!inView && (!this.mobileMode || !(obstacle instanceof Bear && obstacle.alwaysChase))) {
                     continue;
                 }
 
@@ -1546,14 +1612,6 @@ class Game {
         }
         // Update UI
         this.updateUI();
-
-        // DEBUG: Print world and stage children after reset
-        if (this.world && this.world.children) {
-            console.log('[DEBUG] World children after reset:', this.world.children.map(c => c.label || c.constructor.name || c.name));
-        }
-        if (this.app && this.app.stage && this.app.stage.children) {
-            console.log('[DEBUG] Stage children after reset:', this.app.stage.children.map(c => c.label || c.constructor.name || c.name));
-        }
     }
 
     // Clean up all resources and stop the game
@@ -1676,6 +1734,9 @@ window.onload = async () => {
     preloader.add('texture', 'assets/stones.png', 'stones');
     preloader.add('texture', 'assets/bird_glide.png', 'bird_glide');
     preloader.add('texture', 'assets/bird_flap.png', 'bird_flap');
+    // Preload generated foam and splash as a single spritesheet
+    preloader.add('spritesheet', 'assets/generated/particlesheet.png', 'particlesheet_png');
+    preloader.add('spritesheet', 'assets/generated/particlesheet.json', 'particlesheet_json');
     preloader.add('json', 'assets/bear_walk_hbox.json', 'bear_walk_hitbox');
     preloader.add('json', 'assets/bear_eat_hbox.json', 'bear_eat_hitbox');
     preloader.add('json', 'assets/bird_glide_hbox.json', 'bird_glide_hbox');
@@ -1731,6 +1792,7 @@ window.onload = async () => {
         // Set volume and preload for each
         Object.values(game.audioManager.sounds).forEach(audio => {
             if (Array.isArray(audio)) {
+               
                 audio.forEach(a => { if (a) { a.volume = game.audioManager.volume; a.preload = 'auto'; } });
             } else if (audio) {
                 audio.volume = game.audioManager.volume;
