@@ -6,18 +6,18 @@ class Preloader {
         this.promises = [];
     }
 
-    // Add a resource to the preload list
+    // Add a resource to the list for preloading
     // type: 'texture', 'audio', 'json', etc.
-    // url: resource location
-    // name: optional reference name
+    // url: where the resource is located
+    // name: optional, lets you refer to it by a custom name
     add(type, url, name = null) {
         this.resources.push({ type, url, name });
     }
 
-    // Preload all resources (with caching)
-    // Returns a map of loaded resources by name or url
+    // Loads all resources in the list, using cache if available
+    // Returns an object with loaded resources, keyed by name or url
     async preloadAll() {
-            // Guarantee foam/splash atlas files are present in resource list
+            // Make sure foam/splash atlas files are always loaded first
             const foamJsonPath = 'assets/generated/foam_splash_particles.json';
             const foamPngPath = 'assets/generated/foam_splash_particles.png';
             this.resources = this.resources.filter(r => r.url !== foamJsonPath && r.url !== foamPngPath);
@@ -28,7 +28,7 @@ class Preloader {
         let foamSplashPng = null;
         let waterCirclesJson = null;
         let waterCirclesPng = null;
-        // First pass: load all non-spritesheet resources
+        // First, load everything except spritesheets
         for (const res of this.resources) {
             const cacheKey = res.name || res.url;
             if (Preloader.cache[cacheKey]) {
@@ -37,7 +37,7 @@ class Preloader {
             }
             let promise;
             if (res.type === 'spritesheet') {
-                // Robust matching for foam/splash atlas files
+                // Try to match foam/splash atlas files by name or path
                 if (
                     (res.name && res.name.toLowerCase().includes('foam')) &&
                     (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.json'))
@@ -46,10 +46,10 @@ class Preloader {
                     (res.name && res.name.toLowerCase().includes('foam')) &&
                     (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.png'))
                 ) foamSplashPng = res;
-                // Also match by exact file name if name is missing
+                // If no name, check the file name directly
                 if (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.json')) foamSplashJson = res;
                 if (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.png')) foamSplashPng = res;
-                // Water circles
+                // Look for water circles atlas files
                 if (
                     (res.name && res.name.toLowerCase().includes('water_circles')) &&
                     (res.url && res.url.toLowerCase().endsWith('water_circles.json'))
@@ -62,14 +62,17 @@ class Preloader {
                 if (res.url && res.url.toLowerCase().endsWith('water_circles.png')) waterCirclesPng = res;
                 continue;
             }
+            // Load based on resource type
             switch (res.type) {
                 case 'texture':
+                    // Load an image/texture
                     promise = PIXI.Assets.load(res.url).then(tex => {
                         loaded[cacheKey] = tex;
                         Preloader.cache[cacheKey] = tex;
                     });
                     break;
                 case 'audio':
+                    // Load an audio file
                     promise = new Promise(resolve => {
                         const audio = new Audio(res.url);
                         audio.preload = 'auto';
@@ -83,11 +86,12 @@ class Preloader {
                             Preloader.cache[cacheKey] = null;
                             resolve(null);
                         }, { once: true });
-                        // Begin loading audio
+                        // Start loading the audio
                         audio.load();
                     });
                     break;
                 case 'json':
+                    // Load a JSON file
                     promise = fetch(res.url)
                         .then(r => r.ok ? r.json() : null)
                         .then(json => {
@@ -104,16 +108,16 @@ class Preloader {
             }
             this.promises.push(promise);
         }
-        // Now load the foam/splash spritesheet if both JSON and PNG are present
+        // If both foam/splash JSON and PNG are found, load the spritesheet
         if (foamSplashJson && foamSplashPng) {
             try {
-                // Load JSON first
+                // Load the JSON data first
                 const json = await fetch(foamSplashJson.url).then(r => r.ok ? r.json() : null);
                 loaded[foamSplashJson.name || foamSplashJson.url] = json;
                 Preloader.cache[foamSplashJson.name || foamSplashJson.url] = json;
-                // Load PNG
+                // Then load the PNG image
                 const parentTexture = await PIXI.Assets.load(foamSplashPng.url);
-                // Create textures for each frame
+                // Build textures for each frame in the atlas
                 if (json && json.frames) {
                     loaded.particleFrames = {};
                     for (const [key, frame] of Object.entries(json.frames)) {
@@ -129,32 +133,32 @@ class Preloader {
                                 tex.defaultHeight = 20;
                             }
                             loaded.particleFrames[key] = tex;
-                            // Debug: log texture dimensions
+                            // (Optional) You can log texture sizes here for debugging
                             let w = tex.source?.width || tex.baseTexture?.width;
                             let h = tex.source?.height || tex.baseTexture?.height;
                         } catch (err) {
                             console.error(`[Preloader] Exception creating texture '${key}':`, err, tex);
                         }
                     }
-                    // Check for missing expected particle keys
+                    // See if any expected particle keys are missing
                     const expectedKeys = [
                         ...[0, 1, 2, 3, 4, 6, 8].map(size => `foam_${size}`),
                         ...[2, 4, 6, 8].map(size => `splash_${size}`)
                     ];
                     const missingKeys = expectedKeys.filter(k => !(k in loaded.particleFrames));
-                    // Diagnostic: log all keys and sample texture
+                    // (Optional) Log all keys and a sample texture for troubleshooting
                     const keys = Object.keys(loaded.particleFrames);
                     if (keys.length > 0) {
                         const sample = loaded.particleFrames[keys[0]];
                     } else {
-                        console.error('[Preloader DIAG] particleFrames is EMPTY after parsing atlas!');
+                        console.error('[Preloader] No particle frames found after parsing the atlas!');
                     }
                 }
             } catch (err) {
                 // console.error('[Preloader] Error loading foam/splash spritesheet:', err);
             }
         }
-        // Now load the water circles spritesheet if JSON and PNG are present
+        // If both water circles JSON and PNG are found, load that spritesheet too
         if (waterCirclesJson && waterCirclesPng) {
             try {
                 const json = await fetch(waterCirclesJson.url).then(r => r.ok ? r.json() : null);
@@ -172,12 +176,14 @@ class Preloader {
                                 frame: new PIXI.Rectangle(f.x, f.y, f.w, f.h)
                             });
                             loaded.waterCircleFrames[key] = tex;
+                            // (Optional) Log texture size if needed
                             let w = tex.source?.width || tex.baseTexture?.width;
                             let h = tex.source?.height || tex.baseTexture?.height;
                         } catch (err) {
-                            console.error(`[Preloader] Exception creating water circle texture '${key}':`, err, tex);
+                            console.error(`[Preloader] Error creating water circle texture '${key}':`, err, tex);
                         }
                     }
+                    // Find any missing water circle keys
                     const missingKeys = Object.keys(json.frames).filter(k => !(k in loaded.waterCircleFrames));
                 }
             } catch (err) {
@@ -185,20 +191,7 @@ class Preloader {
             }
         }
         await Promise.all(this.promises);
-        // Debug: log foam/splash atlas and particleFrames
-        if (foamSplashJson && foamSplashPng) {
-            const sheetKey = foamSplashJson.name || foamSplashJson.url;
-            if (loaded.particleFrames) {
-                const firstKey = Object.keys(loaded.particleFrames)[0];
-            }
-        }
-        // Debug: log water circles atlas and waterCircleFrames
-        if (waterCirclesJson && waterCirclesPng) {
-            const sheetKey = waterCirclesJson.name || waterCirclesJson.url;
-            if (loaded.waterCircleFrames) {
-                const firstKey = Object.keys(loaded.waterCircleFrames)[0];
-            }
-        }
+        // (Optional) You can log loaded atlases and frames here for debugging
         return loaded;
     }
 }

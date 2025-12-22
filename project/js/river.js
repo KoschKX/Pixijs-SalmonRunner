@@ -72,8 +72,8 @@ class River {
             const segment = {
                 y: i * 50,
                 leftCurve: curveAmount,
-                rightCurve: curveAmount, // Both sides curve together
-                minGap: widthVariation // Width varies smoothly
+                rightCurve: curveAmount, // Both banks curve together
+                minGap: widthVariation // Width changes smoothly
             };
             this.riverBanks.push(segment);
             

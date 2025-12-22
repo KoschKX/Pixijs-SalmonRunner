@@ -1,5 +1,5 @@
 class Waterfall {
-    static FPS = 30; // Change this to your desired FPS
+    static FPS = 30; // Set your preferred frames per second
     static DT = 90 / Waterfall.FPS;
     
     constructor(config, boundaries = { left: 150, right: 650, width: 450 }, getBoundariesAtY = null) {
@@ -7,18 +7,18 @@ class Waterfall {
         this.getBoundariesAtY = getBoundariesAtY;
         this.boundaries = boundaries;
         this.riverWidth = boundaries.width;
-        this.riverLeft = boundaries.left - config.width / 2; // Relative to center
-        this.riverRight = boundaries.right - config.width / 2; // Relative to center
+        this.riverLeft = boundaries.left - config.width / 2; // Position relative to center
+        this.riverRight = boundaries.right - config.width / 2; // Position relative to center
         this.container = new PIXI.Container();
         this.container.label = 'waterfall';
         this.type = 'waterfall';
         this.container.type = 'waterfall';
         
-        // Cache for boundary lookups
+        // Store last boundary lookup
         this.cachedBoundaries = null;
         this.cachedY = null;
         
-        // Debug mode - store reference to world for adding debug box
+        // For debug mode: keep a reference to the world for drawing a debug box
         this.debugBox = null;
         this.world = null; // Will be set when added to world
         
@@ -32,7 +32,7 @@ class Waterfall {
     }
     
     createWaterfallGraphics(width, height) {
-        // Use the same river texture as the background
+        // Use the same texture as the river background
         const waterfallTexture = PIXI.Texture.from('assets/riverbed_B.jpg');
         const textureSprite = new PIXI.TilingSprite({
             texture: waterfallTexture,
@@ -42,12 +42,12 @@ class Waterfall {
         textureSprite.x = -width / 2;
         textureSprite.tileScale.set(256 / waterfallTexture.source.width, 256 / waterfallTexture.source.height);
         
-        // Add blue water overlay (same as river)
+        // Add a blue overlay to match the river color
         const waterOverlay = new PIXI.Graphics();
         waterOverlay.rect(-width / 2, 0, width, height);
         waterOverlay.fill({ color: 0x0066cc, alpha: 0.4 });
         
-        // Create displacement for turbulent water effect
+        // Make a displacement map to create a wavy water effect
         const displacementCanvas = document.createElement('canvas');
         const dispWidth = 512;
         const dispHeight = 512;
@@ -85,7 +85,7 @@ class Waterfall {
         
         textureSprite.filters = [displacementFilter];
         
-        // Create gradient alpha mask
+        // Make a gradient mask for soft edges
         const alphaCanvas = document.createElement('canvas');
         alphaCanvas.width = width;
         alphaCanvas.height = height;
@@ -112,18 +112,17 @@ class Waterfall {
         
         this.container.mask = maskSprite;
         
-        // Store references for animation
+        // Keep references for animation updates
         this.container.textureSprite = textureSprite;
         this.container.displacementSprite = displacementSprite;
         this.container.animationOffset = Math.random() * 100;
         
-        // 30fps timer
+        // Timer for 30fps updates
         this.lastUpdateTime = 0;
         
         this.createRipples(width, height);
         this.createImpactRipples(width, height);
-        // Await splashes so async wait works
-        // If constructor can't be async, use an IIFE
+        // Wait for splashes to finish loading (using an async IIFE)
         (async () => {
             await this.createSplashes(width, height);
             this.createFoamMist(width, height);
@@ -135,7 +134,7 @@ class Waterfall {
     createRipples(width, height) {
         const rippleContainer = new PIXI.Container();
         const ripples = [];
-        const rippleCount = 8; // Reduced from 25 for performance
+        const rippleCount = 8; // Lowered for better performance
         
         for (let i = 0; i < rippleCount; i++) {
             const ripple = new PIXI.Graphics();
@@ -160,7 +159,7 @@ class Waterfall {
         const impactRippleContainer = new PIXI.Container();
         impactRippleContainer.y = height * 0.85;
         const impactRipples = [];
-        const impactRippleCount = 5; // Reduced from 15 for performance
+        const impactRippleCount = 5; // Lowered for better performance
         
         for (let i = 0; i < impactRippleCount; i++) {
             const ripple = new PIXI.Graphics();
@@ -191,7 +190,7 @@ class Waterfall {
         const splashes = [];
         const splashCount = 10;
 
-        // Utility: Wait for particleFrames to be valid before using them
+        // Helper: Wait until particleFrames are ready before using
         async function waitForParticleFramesValid(maxWaitMs = 3000) {
             function areParticleFramesValid() {
                 const frames = window.preloadedResources && window.preloadedResources.particleFrames;
@@ -208,11 +207,10 @@ class Waterfall {
                 await new Promise(r => setTimeout(r, 50));
             }
         }
-        // Wait for particleFrames to be valid before using them
+        // Wait until particleFrames are ready
         await waitForParticleFramesValid();
         // Use particleFrames from preloader for splash and foam particles
         // Always use window.preloadedResources.particleFrames directly
-        // Diagnostic: log particleFrames keys and a sample texture (only once)
         if (window.preloadedResources && window.preloadedResources.particleFrames) {
             const keys = Object.keys(window.preloadedResources.particleFrames);
         }
@@ -246,7 +244,7 @@ class Waterfall {
                     particle = new PIXI.Graphics();
                     particle.circle(0, 0, 2);
                     particle.fill({ color: 0xffffff, alpha: 0.7 });
-                    // Visual debug: red outline for fallback
+                    // If fallback, draw a red outline for debugging
                     particle.circle(0, 0, 2);
                     particle.stroke({ width: 2, color: 0xff0000, alpha: 1 });
                 }
@@ -282,7 +280,7 @@ class Waterfall {
         foamCanvas.height = 50;
         const foamCtx = foamCanvas.getContext('2d');
         
-        const streakCount = 80 + Math.random() * 40;
+        const streakCount = 80 + Math.random() * 40; // Randomize number of foam streaks
         
         for (let i = 0; i < streakCount; i++) {
             const x = Math.random() * width;
@@ -359,21 +357,21 @@ class Waterfall {
                         }
                     });
                 }
-        // Create separate containers for waves (lower z-index) and particles (higher z-index)
+        // Make separate containers for waves (drawn below) and foam particles (drawn above)
         this.waveWakes = new PIXI.Container();
         this.foam = new PIXI.Container();
         
-        // Create splash particles at the bottom using foam textures if available
+        // Add splash particles at the bottom, using foam textures if available
         const foamIndices = [0, 1, 2, 3, 4, 6, 8];
         const splashParticles = [];
         for (let i = 0; i < 100; i++) {
-            // Pick foam texture index
+            // Choose a random foam texture
             const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
             let tex = (window.ParticleManager && window.ParticleManager.textures)
                 ? window.ParticleManager.textures['foam_' + foamIdx]
                 : null;
             let particle;
-            // PixiJS v8+ texture validity: check source/baseTexture width/height
+            // For PixiJS v8+: check if the texture is valid
             const isValid = tex && (
                 (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
                 (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
@@ -383,7 +381,7 @@ class Waterfall {
                 if (particle.anchor && typeof particle.anchor.set === 'function') {
                     particle.anchor.set(0.5);
                 }
-                // Adjust foam particle size for waterfall (larger)
+                // Make foam particles a bit bigger for the waterfall
                 const scale = 0.4 + Math.random() * 0.4; // 0.6–1.0
                 particle.scale.set(scale);
             } else {
@@ -392,7 +390,7 @@ class Waterfall {
                 particle.circle(0, 0, radius);
                 particle.fill({ color: 0xffffff, alpha: 0.8 });
             }
-            // Store normalized position (0-1 across river width)
+            // Save normalized X position (0-1 across river width)
             particle.normalizedX = Math.random();
             particle.baseY = Math.random() * 15 - 10; // Stay near bottom (-10 to +5)
             particle.x = 0; // Will be set in first update
@@ -406,11 +404,11 @@ class Waterfall {
             splashParticles.push(particle);
         }
         
-        // Create circular waves - span across actual river width at this Y coordinate
+        // Add circular waves that spread across the river at this Y
         const circularWaves = [];
         for (let i = 0; i < 15; i++) {
             const ring = new PIXI.Graphics();
-            // Store normalized position - don't calculate X yet (riverWidth not set)
+            // Save normalized X position (riverWidth not set yet)
             ring.normalizedX = Math.random();
             ring.x = 0; // Will be set in first update
             ring.y = Math.random() * 20 - 25;
@@ -424,11 +422,11 @@ class Waterfall {
             circularWaves.push(ring);
         }
         
-        // Create concentric waves - span across actual river width at this Y coordinate
+        // Add concentric waves that spread across the river at this Y
         const concentricWaves = [];
         for (let i = 0; i < 8; i++) {
             const ring = new PIXI.Graphics();
-            // Store normalized position - don't calculate X yet (riverWidth not set)
+            // Save normalized X position (riverWidth not set yet)
             ring.normalizedX = Math.random();
             ring.x = 0; // Will be set in first update
             ring.y = Math.random() * 10 - 20;
@@ -467,13 +465,13 @@ class Waterfall {
         this.container.x = x;
         this.container.y = y;
         
-        // Update debug box position if it exists
+        // Move debug box if it exists
         if (this.debugBox) {
             this.debugBox.x = x;
             this.debugBox.y = y;
         }
         
-        // Calculate boundaries ONCE based on the foam position if we have the function
+        // Only recalculate boundaries if we have a function for it
         if (this.getBoundariesAtY) {
             const foamY = y + this.container.waterfallHeight;
             const boundaries = this.getBoundariesAtY(foamY);
@@ -483,26 +481,26 @@ class Waterfall {
             this.riverLeft = boundaries.left - this.config.width / 2;
             this.riverRight = boundaries.right - this.config.width / 2;
             
-            // Store the river center X for this waterfall
+            // Remember the river's center X for this waterfall
             this.riverCenterX = (boundaries.left + boundaries.right) / 2;
             
-            // Position foam and waves at the river center
+            // Move foam and waves to the river's center
             this.foam.x = this.riverCenterX;
             this.foam.y = y + this.container.waterfallHeight;
             this.waveWakes.x = this.riverCenterX;
             this.waveWakes.y = y + this.container.waterfallHeight;
             
-            // Reposition all particles to match new boundaries
+            // Move all particles to fit the new boundaries
             if (this.foam.splashParticles) {
                 this.foam.splashParticles.forEach(particle => {
-                    // Convert from old position to normalized position (0-1)
+                    // Convert old X to normalized (0-1)
                     const normalized = (particle.baseX + oldRiverWidth / 2) / oldRiverWidth;
-                    // Apply to new boundaries (relative to center)
+                    // Place in new boundaries (relative to center)
                     particle.baseX = (normalized - 0.5) * this.riverWidth;
                 });
             }
             
-            // Reposition circular waves
+            // Move circular waves to fit new boundaries
             if (this.waveWakes.circularWaves) {
                 this.waveWakes.circularWaves.forEach(ring => {
                     const normalized = (ring.x + oldRiverWidth / 2) / oldRiverWidth;
@@ -510,7 +508,7 @@ class Waterfall {
                 });
             }
             
-            // Reposition concentric waves
+            // Move concentric waves to fit new boundaries
             if (this.waveWakes.concentricWaves) {
                 this.waveWakes.concentricWaves.forEach(ring => {
                     const normalized = (ring.x + oldRiverWidth / 2) / oldRiverWidth;
@@ -518,7 +516,7 @@ class Waterfall {
                 });
             }
         } else {
-            // Fallback if no boundary function provided
+            // If no boundary function, just use given x/y
             this.foam.x = x;
             this.foam.y = y + this.container.waterfallHeight;
             this.waveWakes.x = x;
@@ -527,19 +525,19 @@ class Waterfall {
     }
     
     update() {
-        // Throttle to Waterfall.FPS
+        // Only update at the set FPS
         const now = performance.now();
         if (!this.lastUpdateTime) this.lastUpdateTime = 0;
         if (now - this.lastUpdateTime < 1000 / Waterfall.FPS) return;
         const dt = Waterfall.DT;
         this.lastUpdateTime = now;
         
-        // Update foam Y position first
+        // Move foam to the right Y position first
         const foamY = this.container.y + this.container.waterfallHeight;
         this.foam.y = foamY;
         this.waveWakes.y = foamY;
         
-        // Cache boundary lookup - only recalculate if Y changed
+        // Only recalculate boundaries if Y changed
         if (this.cachedY !== foamY) {
             this.cachedY = foamY;
             if (this.getBoundariesAtY) {
@@ -547,14 +545,14 @@ class Waterfall {
             }
         }
         
-        // Use cached boundaries
+        // Use the cached boundaries if available
         if (this.cachedBoundaries) {
             this.riverWidth = this.cachedBoundaries.right - this.cachedBoundaries.left;
             this.foam.x = this.cachedBoundaries.center;
             this.waveWakes.x = this.cachedBoundaries.center;
         }
         
-        // Animate splash particles with spray
+        // Animate foam splash particles
         this.foam.animTime += dt;
         this.waveWakes.animTime += dt;
         if (this.foam.splashParticles) {
@@ -571,7 +569,7 @@ class Waterfall {
                 particle.alpha = 0.6 + Math.sin(particle.phase * 2) * 0.3;
             });
         }
-        // Animate circular expanding waves
+        // Animate circular waves that expand outwards
         if (this.waveWakes.circularWaves) {
             this.waveWakes.circularWaves.forEach(ring => {
                 ring.x = (ring.normalizedX - 0.5) * this.riverWidth;
@@ -611,7 +609,7 @@ class Waterfall {
                 }
             });
         }
-        // Animate texture and displacement for flowing water effect
+        // Animate the water texture and displacement for a flowing look
         if (this.container.textureSprite) {
             this.container.animationOffset += 4 * dt / 2;
             this.container.textureSprite.tilePosition.y = this.container.animationOffset;
@@ -619,7 +617,7 @@ class Waterfall {
         if (this.container.displacementSprite) {
             this.container.displacementSprite.y += 2 * dt / 2;
         }
-        // Animate waterfall ripples
+        // Animate small ripples on the waterfall
         if (this.container.ripples) {
             this.container.ripples.forEach(ripple => {
                 ripple.y += ripple.speedY * dt;
@@ -631,7 +629,7 @@ class Waterfall {
                 }
             });
         }
-        // Animate impact ripples at bottom
+        // Animate ripples where the water hits the bottom
         if (this.container.impactRipples) {
             this.container.impactRipples.forEach(ripple => {
                 if (ripple.delay > 0) {
@@ -654,7 +652,7 @@ class Waterfall {
                 }
             });
         }
-        // Animate water splashes at bottom
+        // Animate water splashes at the bottom
         if (this.container.splashes) {
             this.container.splashes.forEach(splash => {
                 splash.timer -= dt;
@@ -691,7 +689,7 @@ class Waterfall {
                 }
             });
         }
-        // Animate white foam mist at bottom
+        // Animate the white foam mist at the bottom
         if (this.container.foamMist) {
             this.container.mistTime += 0.1 * dt;
             this.container.foamMist.clear();
@@ -704,7 +702,7 @@ class Waterfall {
                 this.container.foamMist.fill({ color: 0xffffff, alpha });
             }
         }
-        // Animate foam sprite position
+        // Animate the foam sprite's vertical position
         if (this.container.foamSprite) {
             this.container.foamAnimationTime += 0.1 * dt;
             this.container.foamSprite.y = Math.sin(this.container.foamAnimationTime) * 5;
@@ -712,7 +710,7 @@ class Waterfall {
     }
     
     recycle(playerPos, index, screenHeight, minSpacing) {
-        // Recycle waterfall if too far behind player
+        // Move the waterfall back to the top if it's too far behind the player
         if (this.container.y > playerPos.y + screenHeight) {
             this.setPosition(
                 this.config.width / 2,
@@ -723,7 +721,7 @@ class Waterfall {
     
     setDebugMode(enabled) {
         if (enabled && !this.debugBox && this.world) {
-            // Create debug box and add to world (not container) so it's always visible
+            // Draw a debug box and add it to the world (not the container) so it's always visible
             const width = 800;
             const height = this.container.waterfallHeight || 80;
             
@@ -734,20 +732,20 @@ class Waterfall {
             this.debugBox.label = 'waterfallDebugBox';
             this.debugBox.zIndex = 150; // Above foam (15) and banks (10), below debug borders (100)
             
-            // Position at same location as waterfall container
+            // Place the debug box at the same spot as the waterfall
             this.debugBox.x = this.container.x;
             this.debugBox.y = this.container.y;
             
-            // Add to world, not container
+            // Add the debug box to the world, not the container
             this.world.addChild(this.debugBox);
         } else if (!enabled && this.debugBox && this.world) {
-            // Remove debug box from world
+            // Take the debug box out of the world
             this.world.removeChild(this.debugBox);
             this.debugBox = null;
         }
     }
 
-    // Call this once after PIXI.Application is created
+    // Call this once after creating your PIXI.Application
     static generateSplashTextures(renderer) {
         Waterfall.splashTextures = [];
         for (let size = 1; size <= 3; size++) {
