@@ -228,7 +228,6 @@ class Waterfall {
             };
 
             for (let j = 0; j < splash.burstSize; j++) {
-                // ...existing code...
                 // Use splash_* textures from window.preloadedResources.particleFrames if available
                 let particle;
                 if (window.preloadedResources && window.preloadedResources.particleFrames) {
