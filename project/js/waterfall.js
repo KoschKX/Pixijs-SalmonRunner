@@ -122,10 +122,14 @@ class Waterfall {
         
         this.createRipples(width, height);
         this.createImpactRipples(width, height);
-        this.createSplashes(width, height);
-        this.createFoamMist(width, height);
-        this.createFoamStreaks(width, height, displacementFilter);
-        this.createTopEdge(width, height);
+        // Await splashes so async wait works
+        // If constructor can't be async, use an IIFE
+        (async () => {
+            await this.createSplashes(width, height);
+            this.createFoamMist(width, height);
+            this.createFoamStreaks(width, height, displacementFilter);
+            this.createTopEdge(width, height);
+        })();
     }
     
     createRipples(width, height) {
@@ -180,12 +184,38 @@ class Waterfall {
         this.container.impactRipples = impactRipples;
     }
     
-    createSplashes(width, height) {
+    async createSplashes(width, height) {
         const splashContainer = new PIXI.Container();
         splashContainer.y = height * 0.88;
 
         const splashes = [];
         const splashCount = 10;
+
+        // Utility: Wait for particleFrames to be valid before using them
+        async function waitForParticleFramesValid(maxWaitMs = 3000) {
+            function areParticleFramesValid() {
+                const frames = window.preloadedResources && window.preloadedResources.particleFrames;
+                if (!frames) return false;
+                const keys = Object.keys(frames);
+                return keys.length > 0 && keys.every(k => {
+                    const t = frames[k];
+                    return t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0));
+                });
+            }
+            const start = Date.now();
+            while (!areParticleFramesValid()) {
+                if (Date.now() - start > maxWaitMs) break;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        // Wait for particleFrames to be valid before using them
+        await waitForParticleFramesValid();
+        // Use particleFrames from preloader for splash and foam particles
+        // Always use window.preloadedResources.particleFrames directly
+        // Diagnostic: log particleFrames keys and a sample texture (only once)
+        if (window.preloadedResources && window.preloadedResources.particleFrames) {
+            const keys = Object.keys(window.preloadedResources.particleFrames);
+        }
 
         for (let i = 0; i < splashCount; i++) {
             const splash = {
@@ -198,18 +228,28 @@ class Waterfall {
             };
 
             for (let j = 0; j < splash.burstSize; j++) {
-                // Use pre-rendered splash textures
-                let texIdx = Math.floor(Math.random() * Waterfall.splashTextures.length);
-                let tex = Waterfall.splashTextures[texIdx];
+                // ...existing code...
+                // Use splash_* textures from window.preloadedResources.particleFrames if available
                 let particle;
-                if (tex) {
-                    particle = new PIXI.Sprite(tex);
-                    particle.anchor.set(0.5);
-                } else {
-                    // fallback
+                if (window.preloadedResources && window.preloadedResources.particleFrames) {
+                    const splashKeys = Object.keys(window.preloadedResources.particleFrames).filter(k => k.startsWith('splash_'));
+                    if (splashKeys.length > 0) {
+                        const key = splashKeys[Math.floor(Math.random() * splashKeys.length)];
+                        const tex = window.preloadedResources.particleFrames[key];
+                        const isValid = tex && ((tex.source && tex.source.width > 0 && tex.source.height > 0) || (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0));
+                        if (isValid) {
+                            particle = new PIXI.Sprite(tex);
+                            particle.anchor.set(0.5);
+                        }
+                    }
+                }
+                if (!particle) {
                     particle = new PIXI.Graphics();
                     particle.circle(0, 0, 2);
                     particle.fill({ color: 0xffffff, alpha: 0.7 });
+                    // Visual debug: red outline for fallback
+                    particle.circle(0, 0, 2);
+                    particle.stroke({ width: 2, color: 0xff0000, alpha: 1 });
                 }
                 particle.velocityX = (Math.random() - 0.5) * 6;
                 particle.velocityY = -3 - Math.random() * 5;
@@ -308,20 +348,52 @@ class Waterfall {
     }
     
     createFoam(width, height) {
+                // Debug: print available foam textures and their validity
+                if (window.ParticleManager && window.ParticleManager.textures) {
+                    const foamIndices = [0, 1, 2, 3, 4, 6, 8];
+                    foamIndices.forEach(idx => {
+                        const key = 'foam_' + idx;
+                        const tex = window.ParticleManager.textures[key];
+                        if (tex){
+                            const valid = (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
+                                          (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0);
+                        }
+                    });
+                }
         // Create separate containers for waves (lower z-index) and particles (higher z-index)
         this.waveWakes = new PIXI.Container();
         this.foam = new PIXI.Container();
         
-        // Create splash particles at the bottom where wake waves happen
+        // Create splash particles at the bottom using foam textures if available
+        const foamIndices = [0, 1, 2, 3, 4, 6, 8];
         const splashParticles = [];
         for (let i = 0; i < 100; i++) {
-            const particle = new PIXI.Graphics();
-            const radius = 1 + Math.random() * 3;
-            particle.circle(0, 0, radius);
-            particle.fill({ color: 0xffffff, alpha: 0.8 });
-            
+            // Pick foam texture index
+            const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
+            let tex = (window.ParticleManager && window.ParticleManager.textures)
+                ? window.ParticleManager.textures['foam_' + foamIdx]
+                : null;
+            let particle;
+            // PixiJS v8+ texture validity: check source/baseTexture width/height
+            const isValid = tex && (
+                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
+                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
+            );
+            if (isValid) {
+                particle = new PIXI.Sprite(tex);
+                if (particle.anchor && typeof particle.anchor.set === 'function') {
+                    particle.anchor.set(0.5);
+                }
+                // Adjust foam particle size for waterfall (larger)
+                const scale = 0.4 + Math.random() * 0.4; // 0.6–1.0
+                particle.scale.set(scale);
+            } else {
+                particle = new PIXI.Graphics();
+                const radius = 1 + Math.random() * 3;
+                particle.circle(0, 0, radius);
+                particle.fill({ color: 0xffffff, alpha: 0.8 });
+            }
             // Store normalized position (0-1 across river width)
-            // Don't calculate baseX yet - riverWidth is not set until first update()
             particle.normalizedX = Math.random();
             particle.baseY = Math.random() * 15 - 10; // Stay near bottom (-10 to +5)
             particle.x = 0; // Will be set in first update
@@ -331,7 +403,6 @@ class Waterfall {
             particle.bobSpeed = 0.05 + Math.random() * 0.08;
             particle.phase = Math.random() * Math.PI * 2;
             particle.gravity = 0.12; // Slightly less gravity so they stay up longer
-            
             this.foam.addChild(particle);
             splashParticles.push(particle);
         }

@@ -220,5 +220,16 @@
         "h": 20
       }
     }
+  },
+  "meta": {
+    "app": "generate_particles_png.js",
+    "version": "1.0",
+    "image": "foam_splash_particles.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 80,
+      "h": 60
+    },
+    "scale": "1"
   }
 }

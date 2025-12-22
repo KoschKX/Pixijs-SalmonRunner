@@ -6,12 +6,16 @@ let romanticSequence = null;
 if (!window.preloader || typeof window.preloader.add !== 'function' || !(window.preloader instanceof Preloader)) {
     window.preloader = new Preloader();
 }
-window.preloader.add('spritesheet', 'assets/generated/particlesheet.json', 'particlesheet');
-window.preloader.add('spritesheet', 'assets/generated/particlesheet.png', 'particlesheet');
-// Assign preloadedResources globally before any game logic
-if (!window.preloadedResources) {
-    // This will be awaited in preloadResources, but we assign a promise here for early access if needed
-    window.preloadedResources = window.preloader.preloadAll();
+// Force foam/splash atlas files to be present at the very start
+const foamJsonPath = 'assets/generated/foam_splash_particles.json';
+const foamPngPath = 'assets/generated/foam_splash_particles.png';
+window.preloader.resources = window.preloader.resources.filter(r => r.url !== foamJsonPath && r.url !== foamPngPath);
+window.preloader.add('spritesheet', foamJsonPath, 'foam_splash_particles_json');
+window.preloader.add('spritesheet', foamPngPath, 'foam_splash_particles_png');
+// Preload water circles atlas (if still needed elsewhere)
+const waterCirclesJsonPath = 'assets/generated/water_circles.json';
+if (!window.preloader.resources.some(r => r.url === waterCirclesJsonPath)) {
+    window.preloader.add('spritesheet', waterCirclesJsonPath, 'water_circles');
 }
 
 class Game {
@@ -317,29 +321,15 @@ class Game {
 
         // Preload all resources (including foam/splash PNGs)
         await this.preloadResources();
-        // Log preloaded resources and particle frames
-        // console.log('[Game] window.preloadedResources:', window.preloadedResources);
-        if (window.preloadedResources && window.preloadedResources.particleFrames) {
-            // console.log('[Game] Particle frames keys:', Object.keys(window.preloadedResources.particleFrames));
-            const testKey = Object.keys(window.preloadedResources.particleFrames)[0];
-            if (testKey) {
-                const testTex = window.preloadedResources.particleFrames[testKey];
-                // console.log(`[Game] Test particle frame '${testKey}':`, testTex);
-                if (testTex && testTex.source) {
-                    // console.log(`[Game] Test texture source for '${testKey}':`, testTex.source);
-                }
-            }
-        } else {
-            // console.warn('[Game] No particleFrames found in preloadedResources!');
-        }
 
-        // Ensure textures are loaded before creating ParticleManager
-        // FIX: Wait for particle frames to be valid before generating textures
+        // Wait for particle frames to be valid before creating waterfalls/particles
         function areParticleFramesValid() {
-            const keys = Object.keys(window.preloadedResources.particleFrames || {});
+            const frames = window.preloadedResources && window.preloadedResources.particleFrames;
+            if (!frames) return false;
+            const keys = Object.keys(frames);
             return keys.length > 0 && keys.every(k => {
-                const t = window.preloadedResources.particleFrames[k];
-                return t && t.valid;
+                const t = frames[k];
+                return t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0));
             });
         }
         async function waitForParticleFramesValid(maxWaitMs = 2000) {
@@ -349,17 +339,11 @@ class Game {
                 await new Promise(r => setTimeout(r, 50));
             }
         }
-        await waitForParticleFramesValid();
+        await waitForParticleFramesValid(3000); // Wait up to 3 seconds for textures
+
+        // Now safe to create waterfalls, particles, etc.
         if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
-            ParticleManager.generateParticleTextures(this.app.renderer);
-            // console.log('[Game] ParticleManager.textures:', ParticleManager.textures);
-            const splashKey = 'splash_2';
-            if (ParticleManager.textures[splashKey]) {
-                // console.log(`[Game] ParticleManager texture '${splashKey}':`, ParticleManager.textures[splashKey]);
-                if (ParticleManager.textures[splashKey].source) {
-                    // console.log(`[Game] ParticleManager texture source for '${splashKey}':`, ParticleManager.textures[splashKey].source);
-                }
-            }
+            await ParticleManager.generateParticleTextures(this.app.renderer);
         }
         // Generate pre-rendered waterfall splash textures
         if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
@@ -1737,6 +1721,9 @@ window.onload = async () => {
     // Preload generated foam and splash as a single spritesheet
     preloader.add('spritesheet', 'assets/generated/particlesheet.png', 'particlesheet_png');
     preloader.add('spritesheet', 'assets/generated/particlesheet.json', 'particlesheet_json');
+    // Add water circles spritesheet (only .json, .png is loaded by the spritesheet loader)
+    preloader.add('spritesheet', 'assets/generated/water_circles.json', 'water_circles');
+    preloader.add('spritesheet', 'assets/generated/water_circles.png', 'water_circles_png');
     preloader.add('json', 'assets/bear_walk_hbox.json', 'bear_walk_hitbox');
     preloader.add('json', 'assets/bear_eat_hbox.json', 'bear_eat_hitbox');
     preloader.add('json', 'assets/bird_glide_hbox.json', 'bird_glide_hbox');
@@ -1748,15 +1735,34 @@ window.onload = async () => {
     preloader.add('audio', 'assets/audio/splash_D.mp3', 'splash_D');
     preloader.add('audio', 'assets/audio/splash_E.mp3', 'splash_E');
     preloader.add('audio', 'assets/audio/splash_F.mp3', 'splash_F');
+
     preloader.add('audio', 'assets/audio/jingle_A.mp3', 'jingle_A');
     preloader.add('audio', 'assets/audio/jingle_B.mp3', 'jingle_B');
     preloader.add('audio', 'assets/audio/jingle_C.mp3', 'jingle_C');
     preloader.add('audio', 'assets/audio/jingle_D.mp3', 'jingle_D');
     preloader.add('audio', 'assets/audio/kiss_A.mp3', 'kiss_A');
 
+
     // Preload all resources
     preloadedResources = await preloader.preloadAll();
     window.preloadedResources = preloadedResources;
+    // Ensure particleFrames is present and valid
+    if (!window.preloadedResources.particleFrames || Object.keys(window.preloadedResources.particleFrames).length === 0) {
+        console.error('[Game ERROR] particleFrames missing or empty after preload!');
+    } else {
+        // Check validity of each frame
+        const keys = Object.keys(window.preloadedResources.particleFrames);
+        const invalid = keys.filter(k => {
+            const t = window.preloadedResources.particleFrames[k];
+            return !t || !(t.source && t.source.width > 0 && t.source.height > 0);
+        });
+        if (invalid.length > 0) {
+            console.error('[Game ERROR] Some particleFrames are invalid:', invalid);
+        }
+    }
+    // Parse foam/splash particle spritesheet and assign textures
+    // Particle frames are now parsed and assigned by the preloader.
+    // Water circle frames are now parsed and assigned by the preloader.
 
     // Create game instance (but don't start yet)
     const canvas = document.getElementById('gameCanvas');
