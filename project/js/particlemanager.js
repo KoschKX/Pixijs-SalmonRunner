@@ -1,105 +1,162 @@
-// Utility: Wait for particleFrames to be valid before generating textures
-function waitForParticleFramesValid(maxWaitMs = 3000) {
-    function areParticleFramesValid() {
-        const frames = window.preloadedResources && window.preloadedResources.particleFrames;
-        if (!frames) return false;
-        const keys = Object.keys(frames);
-        if (!keys.length) return false;
-        for (const k of keys) {
-            const t = frames[k];
-            if (!t || !(t.source && t.source.width > 0 && t.source.height > 0)) return false;
-        }
-        return true;
-    }
-    return new Promise(resolve => {
-        const start = performance.now();
-        function check() {
-            if (areParticleFramesValid()) return resolve();
-            if (performance.now() - start > maxWaitMs) {
-                return resolve();
-            }
-            setTimeout(check, 50);
-        }
-        check();
-    });
-}
-//ParticleManager.js
-// Manages all particle effects, foam, waves, and streaks in the game
-// Requires RiverStreaks to be loaded globally before this script
 
-// Utility: Wait for particleFrames to be valid before generating textures
-function waitForParticleFramesValid(maxWaitMs = 3000) {
-    function areParticleFramesValid() {
-        const frames = window.preloadedResources && window.preloadedResources.particleFrames;
-        if (!frames) return false;
-        const keys = Object.keys(frames);
-        if (!keys.length) return false;
-        for (const k of keys) {
-            const t = frames[k];
-            if (!t || !(t.source && t.source.width > 0 && t.source.height > 0)) return false;
-        }
-        return true;
-    }
-    return new Promise(resolve => {
-        const start = performance.now();
-        function check() {
-            if (areParticleFramesValid()) return resolve();
-            if (performance.now() - start > maxWaitMs) {
-                return resolve();
-            }
-            setTimeout(check, 50);
-        }
-        check();
-    });
-}
 
 class ParticleManager {
-            // For rate-limited debug logging
-            static lastSummaryLog = 0;
-        // Maximum number of particles and foam allowed (lower on mobile)
-        static getMaxParticles() {
-            if (window.game && window.game.mobileMode) return 80;
-            return 180;
+    /**
+     * Get the maximum number of particles allowed (lower on mobile).
+     */
+    static getMaxParticles() {
+        if (window.game && window.game.mobileMode) return 80;
+        return 180;
+    }
+
+    /**
+     * Get the maximum number of foam particles allowed (lower on mobile).
+     */
+    static getMaxFoam() {
+        if (window.game && window.game.mobileMode) return 32;
+        return 64;
+    }
+        /**
+         * Create circular and concentric wave sprites for waterfall effects.
+         * Returns { circularWaves, concentricWaves } arrays.
+         * @param {PIXI.Container} waveWakes - Container to add waves to
+         * @param {Array} rippleTextures - Array of PIXI textures for ripples
+         * @param {number} riverWidth - Width of the river
+         */
+        static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
+            // Circular waves (smaller scale)
+            const circularWaves = [];
+            for (let i = 0; i < 15; i++) {
+                let sprite = null;
+                if (rippleTextures && rippleTextures.length > 0) {
+                    const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                    sprite = new PIXI.Sprite(tex);
+                    if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
+                } else {
+                    sprite = new PIXI.Graphics();
+                    sprite.circle(0, 0, 6);
+                    sprite.fill({ color: 0xffffff, alpha: 0.3 });
+                }
+                sprite.normalizedX = Math.random();
+                sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
+                sprite.y = Math.random() * 20 - 25;
+                sprite.radius = 0;
+                sprite.maxRadius = 25 + Math.random() * 20;
+                sprite.speed = 1.2 + Math.random() * 0.8;
+                sprite.delay = i * 4;
+                sprite.timer = 0;
+                sprite.baseScale = 0.08;
+                sprite.maxScale = sprite.maxRadius / 32;
+                sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
+                sprite.alpha = 0.6;
+                waveWakes.addChild(sprite);
+                circularWaves.push(sprite);
+            }
+            // Concentric waves (smaller scale)
+            const concentricWaves = [];
+            for (let i = 0; i < 8; i++) {
+                let sprite = null;
+                if (rippleTextures && rippleTextures.length > 0) {
+                    const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                    sprite = new PIXI.Sprite(tex);
+                    if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
+                } else {
+                    sprite = new PIXI.Graphics();
+                    sprite.circle(0, 0, 6);
+                    sprite.fill({ color: 0xffffff, alpha: 0.3 });
+                }
+                sprite.normalizedX = Math.random();
+                sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
+                sprite.y = Math.random() * 10 - 20;
+                sprite.radius = i * 10;
+                sprite.maxRadius = 70;
+                sprite.speed = 0.8;
+                sprite.delay = i * 6;
+                sprite.timer = 0;
+                sprite.baseScale = 0.08;
+                sprite.maxScale = sprite.maxRadius / 32;
+                sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
+                sprite.alpha = 0.7;
+                waveWakes.addChild(sprite);
+                concentricWaves.push(sprite);
+            }
+            return { circularWaves, concentricWaves };
         }
-        static getMaxFoam() {
-            if (window.game && window.game.mobileMode) return 32;
-            return 64;
-        }
-    // Static cache for pre-rendered textures
     static textures = {};
-    // Call this ONCE after PIXI.Application is created, before any particles are emitted
-    static generateParticleTextures(renderer) {
-        // Wait for particleFrames to be valid before generating textures
-        return waitForParticleFramesValid(3000).then(function() {
-            // Use textures from the loaded spritesheet atlases (preloadedResources.particleFrames and preloadedResources.waterCircleFrames)
-            const foamKeys = ['foam_0', 'foam_1', 'foam_2', 'foam_3', 'foam_4', 'foam_6', 'foam_8'];
-            const splashKeys = ['splash_2', 'splash_4', 'splash_6', 'splash_8'];
-            const waterCircleKeys = [8, 16, 24, 32, 40, 48, 56].map(size => `water_circle_${size}`);
-            if (window.preloadedResources) {
-                if (window.preloadedResources.particleFrames) {
-                    [...foamKeys, ...splashKeys].forEach(key => {
-                        const tex = window.preloadedResources.particleFrames[key];
-                        if (tex && tex.source && tex.source.width > 0 && tex.source.height > 0) {
-                            ParticleManager.textures[key] = tex;
-                        }
-                    });
-                }
-                if (window.preloadedResources.waterCircleFrames) {
-                    waterCircleKeys.forEach(key => {
-                        const tex = window.preloadedResources.waterCircleFrames[key];
-                        if (tex && tex.source && tex.source.width > 0 && tex.source.height > 0) {
-                            ParticleManager.textures[key] = tex;
-                        }
-                    });
-                }
+    static lastSummaryLog = 0;
+    static FPS = 30;
+    static DT = 45 / ParticleManager.FPS;
+
+    /**
+     * Create expanding circle wave sprites for stone effects.
+     * Returns an array of wave sprites (PIXI.Sprite or PIXI.Graphics).
+     * @param {PIXI.Container} waveContainer - Container to add waves to
+     * @param {number} count - Number of waves (default 3)
+     * @param {Array} rippleTextures - Array of PIXI textures for ripples
+     */
+    static createStoneCircleWaves(waveContainer, count = 3, rippleTextures = null, stoneScale = 1) {
+        const waves = [];
+        // Ensure a minimum base radius and scale for visibility
+        const minRadius = 18;
+        const baseRadius = Math.max(32 * stoneScale * 1.2, minRadius); // 1.2x for more visible waves
+        const minScale = 0.7; // Start larger for visibility
+        const maxScale = 2.2; // End larger for visibility
+        for (let i = 0; i < count; i++) {
+            let wave;
+            if (rippleTextures && rippleTextures.length > 0) {
+                const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                wave = new PIXI.Sprite(tex);
+                if (wave.anchor && typeof wave.anchor.set === 'function') wave.anchor.set(0.5);
+                wave.scale.set(minScale);
+            } else {
+                wave = new PIXI.Graphics();
+                wave.circle(0, 0, baseRadius);
+                wave.fill({ color: 0xffffff, alpha: 0.3 });
+            }
+            wave.label = `wave${i}`;
+            wave.alpha = 0;
+            wave.startDelay = i * 24;
+            wave.lifetime = 0;
+            wave.baseScale = minScale;
+            wave.maxScale = maxScale;
+            wave.baseRadius = baseRadius;
+            waveContainer.addChild(wave);
+            waves.push(wave);
+        }
+        return waves;
+    }
+
+    /**
+     * Animate stone circle waves (call per frame).
+     * @param {Array} waves - Array of wave sprites
+     */
+    static animateStoneCircleWaves(waves) {
+        waves.forEach(wave => {
+            wave.lifetime++;
+            if (wave.lifetime < wave.startDelay) return;
+            const age = wave.lifetime - wave.startDelay;
+            const maxAge = 120;
+            if (age > maxAge) {
+                wave.lifetime = 0;
+                wave.alpha = 0;
+                if (wave.scale && typeof wave.scale.set === 'function') wave.scale.set(wave.baseScale);
+                return;
+            }
+            const progress = age / maxAge;
+            const scale = wave.baseScale + (wave.maxScale - wave.baseScale) * progress;
+            if (wave.scale && typeof wave.scale.set === 'function') wave.scale.set(scale);
+            // Fade out as they grow: quadratic fade
+            wave.alpha = Math.max(0, 0.5 * (1 - progress) * (1 - progress));
+            if (wave instanceof PIXI.Graphics) {
+                wave.clear();
+                wave.circle(0, 0, wave.baseRadius * scale);
+                wave.stroke({ width: 2, color: 0xffffff, alpha: wave.alpha });
             }
         });
     }
-    static FPS = 30; // Set the target FPS for particle updates
-    static DT = 45 / ParticleManager.FPS;
 
         // Emit foam at a stone's position using its hitbox and scale
-        emitFoamAtStone(stone) {
+        emitFoamAtStone(stone, rippleTextures = null) {
             // Emit foam every other frame for density
             if (!stone.foamFrame) stone.foamFrame = 0;
             stone.foamFrame++;
@@ -133,27 +190,28 @@ class ParticleManager {
                 const speed = 0.32 + Math.random() * 0.22;
                 const vx = Math.cos(angle) * speed + (Math.random() - 0.5) * 0.22;
                 const vy = Math.sin(angle) * speed + (Math.random() - 0.5) * 0.18;
-                    // Pick foam texture index inside the loop
-                    const foamIndices = [0, 1, 2, 3, 4, 6, 8];
+                // Pick foam texture index inside the loop
+                const foamIndices = [0, 1, 2, 3, 4, 6, 8];
+                let foam;
+                let tex = null;
+                if (rippleTextures && rippleTextures.length > 0) {
+                    tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                } else {
                     const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
-                    let tex = ParticleManager.textures['foam_' + foamIdx];
-                    let foam;
-                    // PixiJS v8+ texture validity: check source width/height
-                    const isValid = tex && (
-                        (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                        (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
-                    );
-                    if (isValid) {
-                        foam = new PIXI.Sprite(tex);
-                        foam.anchor.set(0.5);
-                    } else {
-                        foam = new PIXI.Graphics();
-                        foam.ellipse(0, 0, 5, 8);
-                        foam.fill(0x3399ff); // Blue fallback for foam
-                        // Visual debug: red outline for fallback
-                        foam.ellipse(0, 0, 5, 8);
-                        foam.stroke({ width: 2, color: 0xff0000, alpha: 1 });
+                    tex = ParticleManager.textures['foam_' + foamIdx];
+                }
+                if (tex) {
+                    foam = new PIXI.Sprite(tex);
+                    foam.anchor.set(0.5);
+                } else {
+                    // Log a warning if fallback is used (should not happen if textures exist)
+                    if (window && window.console && window.console.warn) {
+                       // console.warn('Foam texture missing for stone foam, using fallback.');
                     }
+                    foam = new PIXI.Graphics();
+                    foam.ellipse(0, 0, 5, 8);
+                    foam.fill(0x3399ff); // Blue fallback for foam
+                }
                 foam.x = spawnX;
                 foam.y = spawnY;
                 foam.vx = vx;
@@ -644,6 +702,22 @@ class ParticleManager {
         this.waveContainers.forEach(w => this.world.removeChild(w));
         this.waveContainers = [];
         this.destroyStreaks();
+    }
+
+    /**
+     * Copies preloaded foam/splash particle frames into ParticleManager.textures.
+     * Call this after preloading is complete.
+     */
+    static generateParticleTextures() {
+        // Use window.preloadedResources.particleFrames if available
+        const frames = window.preloadedResources && window.preloadedResources.particleFrames;
+        if (frames && typeof frames === 'object') {
+            for (const key of Object.keys(frames)) {
+                ParticleManager.textures[key] = frames[key];
+            }
+        } else {
+            console.warn('[ParticleManager] No particle frames found in preloadedResources. Foam/splash textures will not be used.');
+        }
     }
 }
 

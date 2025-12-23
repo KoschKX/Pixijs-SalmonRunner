@@ -7,6 +7,9 @@
     <title>Salmon Rush - Vertical Scroller</title>
     <script src="js/input.js"></script>
     <style>
+        .noscroll {
+            overflow: hidden;
+        }
         body {
             margin: 0;
             padding: 0;
@@ -165,8 +168,8 @@
         }
     </style>
 </head>
-<body>
-    <div id="preloader">
+<body class="noscroll">
+    <div id="preloader" class="noscroll">
         <div class="progress-container">
             <div class="progress-bar"></div>
             <div class="progress-text">0%</div>
@@ -174,15 +177,15 @@
         </div>
         <button id="startButton" onclick="startGame()">START</button>
     </div>
-    <div id="gameContainer">
+    <div id="gameContainer" class="noscroll">
         <canvas id="gameCanvas"></canvas>
     </div>
-    <div id="gameInfo">
+    <div id="gameInfo" class="noscroll">
         <div id="health"></div>
         <div>Distance: <span id="distance">0</span>m</div>
     </div>
-    <div id="gameOverBackdrop"></div>
-    <div id="gameOver">
+    <div id="gameOverBackdrop" class="noscroll"></div>
+    <div id="gameOver" class="noscroll">
         <h1 id="gameOverTitle">Game Over</h1>
         <p id="gameOverMessage"></p>
         <p>Distance: <span id="finalDistance">0</span>m</p>

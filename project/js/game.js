@@ -19,6 +19,10 @@ if (!window.preloader.resources.some(r => r.url === waterCirclesJsonPath)) {
 }
 
 class Game {
+            // Detect mobile device (simple user agent check)
+            isMobileDevice() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            }
         // Detect mobile device (simple user agent check)
         isMobileDevice() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -304,6 +308,44 @@ class Game {
     }
     // Set up and start the game
     async init() {
+        // Performance: lower renderer resolution and max particles on mobile
+        this.isMobile = this.isMobileDevice();
+        // Lower max particles/foam for mobile
+        if (this.isMobile && window.ParticleManager) {
+            window.ParticleManager.getMaxParticles = () => 60;
+            window.ParticleManager.getMaxFoam = () => 24;
+        }
+        // Lower PixiJS renderer resolution for mobile
+        const resolution = this.isMobile ? 1 : window.devicePixelRatio || 1;
+        // If app not created, create with optimized settings
+        if (!this.app) {
+            this.app = new PIXI.Application();
+            await this.app.init({
+                canvas: this.canvas,
+                width: this.config.width,
+                height: this.config.height,
+                backgroundColor: this.config.backgroundColor,
+                targetFrameRate: this.isMobile ? 45 : 60,
+                clearBeforeRender: true,
+                antialias: false,
+                resolution: resolution,
+                autoDensity: true,
+                powerPreference: 'low-power',
+            });
+            // Limit FPS for mobile
+            this.app.ticker.maxFPS = this.isMobile ? 45 : 60;
+            // Optional: frame time logging for debugging
+            this.frameTimeLog = false; // set to true to enable
+            if (this.frameTimeLog) {
+                let last = performance.now();
+                this.app.ticker.add(() => {
+                    const now = performance.now();
+                    const dt = now - last;
+                    last = now;
+                    if (dt > 20) console.log('Frame time:', dt.toFixed(2), 'ms');
+                });
+            }
+        }
         this.setMobileMode();
         // Create Pixi Application if needed
         if (!this.app) {
@@ -343,7 +385,18 @@ class Game {
 
         // Now safe to create waterfalls, particles, etc.
         if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
-            await ParticleManager.generateParticleTextures(this.app.renderer);
+            ParticleManager.generateParticleTextures();
+            // Debug log: check loaded splash/foam textures
+            if (window.ParticleManager && window.ParticleManager.textures) {
+                const keys = Object.keys(window.ParticleManager.textures);
+                const summary = keys.map(k => {
+                    const t = window.ParticleManager.textures[k];
+                    let valid = false;
+                    if (t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0))) valid = true;
+                    return `${k}: ${valid ? 'OK' : 'INVALID'}`;
+                });
+                console.log('[ParticleManager] Loaded particle textures:', summary.join(', '));
+            }
         }
         // Generate pre-rendered waterfall splash textures
         if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
@@ -1024,7 +1077,6 @@ class Game {
 
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obstacle = this.obstacles[i];
-                // ...existing code...
                 let obstaclePos;
                 if (
                     (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net) && typeof obstacle.getPosition === 'function'

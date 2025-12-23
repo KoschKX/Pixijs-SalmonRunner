@@ -27,7 +27,8 @@ class Waterfall {
         
         this.createWaterfallGraphics(width, height);
         this.createFoam(width, height);
-        
+        this.createWaveWakes(width, height);
+
         this.container.waterfallHeight = height;
     }
     
@@ -120,150 +121,13 @@ class Waterfall {
         // Timer for 30fps updates
         this.lastUpdateTime = 0;
         
-        this.createRipples(width, height);
-        this.createImpactRipples(width, height);
         // Wait for splashes to finish loading (using an async IIFE)
         (async () => {
-            await this.createSplashes(width, height);
+           // await this.createSplashes(width, height);
             this.createFoamMist(width, height);
             this.createFoamStreaks(width, height, displacementFilter);
             this.createTopEdge(width, height);
         })();
-    }
-    
-    createRipples(width, height) {
-        const rippleContainer = new PIXI.Container();
-        const ripples = [];
-        const rippleCount = 8; // Lowered for better performance
-        
-        for (let i = 0; i < rippleCount; i++) {
-            const ripple = new PIXI.Graphics();
-            ripple.circle(0, 0, 2 + Math.random() * 3);
-            ripple.fill({ color: 0xffffff, alpha: 0.3 });
-            
-            ripple.x = (Math.random() - 0.5) * width;
-            ripple.y = Math.random() * height;
-            ripple.speedY = 2 + Math.random() * 3;
-            ripple.fadeSpeed = 0.005 + Math.random() * 0.01;
-            ripple.alpha = Math.random() * 0.3;
-            
-            rippleContainer.addChild(ripple);
-            ripples.push(ripple);
-        }
-        
-        this.container.addChild(rippleContainer);
-        this.container.ripples = ripples;
-    }
-    
-    createImpactRipples(width, height) {
-        const impactRippleContainer = new PIXI.Container();
-        impactRippleContainer.y = height * 0.85;
-        const impactRipples = [];
-        const impactRippleCount = 5; // Lowered for better performance
-        
-        for (let i = 0; i < impactRippleCount; i++) {
-            const ripple = new PIXI.Graphics();
-            
-            const x = (Math.random() - 0.5) * width;
-            const maxRadius = 15 + Math.random() * 25;
-            
-            ripple.x = x;
-            ripple.y = Math.random() * (height * 0.15);
-            ripple.maxRadius = maxRadius;
-            ripple.radius = 0;
-            ripple.expandSpeed = 1.2 + Math.random() * 1.5;
-            ripple.initialAlpha = 0.4 + Math.random() * 0.3;
-            ripple.delay = Math.random() * 60;
-            
-            impactRippleContainer.addChild(ripple);
-            impactRipples.push(ripple);
-        }
-        
-        this.container.addChild(impactRippleContainer);
-        this.container.impactRipples = impactRipples;
-    }
-    
-    async createSplashes(width, height) {
-        const splashContainer = new PIXI.Container();
-        splashContainer.y = height * 0.88;
-
-        const splashes = [];
-        const splashCount = 10;
-
-        // Helper: Wait until particleFrames are ready before using
-        async function waitForParticleFramesValid(maxWaitMs = 3000) {
-            function areParticleFramesValid() {
-                const frames = window.preloadedResources && window.preloadedResources.particleFrames;
-                if (!frames) return false;
-                const keys = Object.keys(frames);
-                return keys.length > 0 && keys.every(k => {
-                    const t = frames[k];
-                    return t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0));
-                });
-            }
-            const start = Date.now();
-            while (!areParticleFramesValid()) {
-                if (Date.now() - start > maxWaitMs) break;
-                await new Promise(r => setTimeout(r, 50));
-            }
-        }
-        // Wait until particleFrames are ready
-        await waitForParticleFramesValid();
-        // Use particleFrames from preloader for splash and foam particles
-        // Always use window.preloadedResources.particleFrames directly
-        if (window.preloadedResources && window.preloadedResources.particleFrames) {
-            const keys = Object.keys(window.preloadedResources.particleFrames);
-        }
-
-        for (let i = 0; i < splashCount; i++) {
-            const splash = {
-                x: (Math.random() - 0.5) * width,
-                y: 0,
-                particles: [],
-                active: false,
-                timer: Math.random() * 60,
-                burstSize: 3 + Math.random() * 3
-            };
-
-            for (let j = 0; j < splash.burstSize; j++) {
-                // Use splash_* textures from window.preloadedResources.particleFrames if available
-                let particle;
-                if (window.preloadedResources && window.preloadedResources.particleFrames) {
-                    const splashKeys = Object.keys(window.preloadedResources.particleFrames).filter(k => k.startsWith('splash_'));
-                    if (splashKeys.length > 0) {
-                        const key = splashKeys[Math.floor(Math.random() * splashKeys.length)];
-                        const tex = window.preloadedResources.particleFrames[key];
-                        const isValid = tex && ((tex.source && tex.source.width > 0 && tex.source.height > 0) || (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0));
-                        if (isValid) {
-                            particle = new PIXI.Sprite(tex);
-                            particle.anchor.set(0.5);
-                        }
-                    }
-                }
-                if (!particle) {
-                    particle = new PIXI.Graphics();
-                    particle.circle(0, 0, 2);
-                    particle.fill({ color: 0xffffff, alpha: 0.7 });
-                    // If fallback, draw a red outline for debugging
-                    particle.circle(0, 0, 2);
-                    particle.stroke({ width: 2, color: 0xff0000, alpha: 1 });
-                }
-                particle.velocityX = (Math.random() - 0.5) * 6;
-                particle.velocityY = -3 - Math.random() * 5;
-                particle.gravity = 0.2;
-                particle.life = 1;
-                particle.fadeSpeed = 0.02 + Math.random() * 0.02;
-                particle.visible = false;
-
-                splashContainer.addChild(particle);
-                splash.particles.push(particle);
-            }
-
-            splashes.push(splash);
-        }
-
-        this.container.addChild(splashContainer);
-        this.container.splashes = splashes;
     }
     
     createFoamMist(width, height) {
@@ -404,49 +268,31 @@ class Waterfall {
             splashParticles.push(particle);
         }
         
-        // Add circular waves that spread across the river at this Y
-        const circularWaves = [];
-        for (let i = 0; i < 15; i++) {
-            const ring = new PIXI.Graphics();
-            // Save normalized X position (riverWidth not set yet)
-            ring.normalizedX = Math.random();
-            ring.x = 0; // Will be set in first update
-            ring.y = Math.random() * 20 - 25;
-            ring.radius = 0;
-            ring.maxRadius = 25 + Math.random() * 20;
-            ring.speed = 1.2 + Math.random() * 0.8;
-            ring.delay = i * 4;
-            ring.timer = 0;
-            
-            this.waveWakes.addChild(ring);
-            circularWaves.push(ring);
-        }
-        
-        // Add concentric waves that spread across the river at this Y
-        const concentricWaves = [];
-        for (let i = 0; i < 8; i++) {
-            const ring = new PIXI.Graphics();
-            // Save normalized X position (riverWidth not set yet)
-            ring.normalizedX = Math.random();
-            ring.x = 0; // Will be set in first update
-            ring.y = Math.random() * 10 - 20;
-            ring.radius = i * 10;
-            ring.maxRadius = 70;
-            ring.speed = 0.8;
-            ring.delay = i * 6;
-            ring.timer = 0;
-            
-            this.waveWakes.addChild(ring);
-            concentricWaves.push(ring);
-        }
-        
-        this.waveWakes.y = height;
         this.foam.y = height;
-        this.waveWakes.circularWaves = circularWaves;
-        this.waveWakes.concentricWaves = concentricWaves;
-        this.waveWakes.animTime = 0;
         this.foam.splashParticles = splashParticles;
         this.foam.animTime = 0;
+
+    }
+
+    createWaveWakes(width, height) {
+        // Add circular and concentric waves as textured sprites (water_circles)
+        let rippleTextures = null;
+        if (window.ParticleManager && window.ParticleManager.textures && window.ParticleManager.textures.waterCircleFrames) {
+            rippleTextures = window.ParticleManager.textures.waterCircleFrames;
+        } else if (window.preloadedResources && window.preloadedResources.waterCircleFrames) {
+            rippleTextures = window.preloadedResources.waterCircleFrames;
+        }
+        if (rippleTextures && !Array.isArray(rippleTextures)) {
+            rippleTextures = Object.values(rippleTextures);
+        }
+        if (rippleTextures) {
+            rippleTextures = rippleTextures.filter(t => t && (t.baseTexture || t.source));
+        }
+        const waveResults = window.ParticleManager.createWaterfallWaves(this.waveWakes, rippleTextures, this.riverWidth);
+        this.waveWakes.y = height;
+        this.waveWakes.circularWaves = waveResults.circularWaves;
+        this.waveWakes.concentricWaves = waveResults.concentricWaves;
+        this.waveWakes.animTime = 0;
     }
     
     getContainer() {
@@ -569,7 +415,7 @@ class Waterfall {
                 particle.alpha = 0.6 + Math.sin(particle.phase * 2) * 0.3;
             });
         }
-        // Animate circular waves that expand outwards
+        // Animate circular waves (sprites)
         if (this.waveWakes.circularWaves) {
             this.waveWakes.circularWaves.forEach(ring => {
                 ring.x = (ring.normalizedX - 0.5) * this.riverWidth;
@@ -580,16 +426,17 @@ class Waterfall {
                         ring.radius = 0;
                         ring.timer = 0;
                     }
-                    ring.clear();
-                    const alpha = 1 - (ring.radius / ring.maxRadius);
-                    if (alpha > 0.1) {
-                        ring.ellipse(0, 0, ring.radius, ring.radius * 0.6);
-                        ring.stroke({ width: 2, color: 0xffffff, alpha: alpha * 0.6 });
-                    }
+                    const progress = ring.radius / ring.maxRadius;
+                    const scaleX = ring.baseScale + (ring.maxScale - ring.baseScale) * progress;
+                    const scaleY = scaleX * 0.6;
+                    if (ring.scale && typeof ring.scale.set === 'function') ring.scale.set(scaleX, scaleY);
+                    ring.alpha = 0.6 * (1 - progress);
+                } else {
+                    ring.alpha = 0;
                 }
             });
         }
-        // Animate concentric waves
+        // Animate concentric waves (sprites)
         if (this.waveWakes.concentricWaves) {
             this.waveWakes.concentricWaves.forEach(ring => {
                 ring.x = (ring.normalizedX - 0.5) * this.riverWidth;
@@ -600,12 +447,13 @@ class Waterfall {
                         ring.radius = 0;
                         ring.timer = 0;
                     }
-                    ring.clear();
-                    const alpha = 1 - (ring.radius / ring.maxRadius);
-                    if (alpha > 0.15) {
-                        ring.ellipse(0, 0, ring.radius, ring.radius * 0.6);
-                        ring.stroke({ width: 2.5, color: 0xffffff, alpha: alpha * 0.7 });
-                    }
+                    const progress = ring.radius / ring.maxRadius;
+                    const scaleX = ring.baseScale + (ring.maxScale - ring.baseScale) * progress;
+                    const scaleY = scaleX * 0.6;
+                    if (ring.scale && typeof ring.scale.set === 'function') ring.scale.set(scaleX, scaleY);
+                    ring.alpha = 0.7 * (1 - progress);
+                } else {
+                    ring.alpha = 0;
                 }
             });
         }
@@ -617,35 +465,41 @@ class Waterfall {
         if (this.container.displacementSprite) {
             this.container.displacementSprite.y += 2 * dt / 2;
         }
-        // Animate small ripples on the waterfall
+        // Animate small ripples on the waterfall (sprites)
         if (this.container.ripples) {
             this.container.ripples.forEach(ripple => {
                 ripple.y += ripple.speedY * dt;
                 ripple.alpha -= ripple.fadeSpeed * dt;
+                // Grow the ripple as it fades
+                if (ripple.scale && ripple.baseScale) {
+                    ripple.scale.set(ripple.scale.x + ripple.rippleGrowth * dt);
+                }
                 if (ripple.y > this.container.waterfallHeight || ripple.alpha <= 0) {
                     ripple.y = 0;
                     ripple.x = (Math.random() - 0.5) * this.container.waterfallHeight * 0.4;
                     ripple.alpha = Math.random() * 0.3;
+                    if (ripple.baseScale) ripple.scale.set(ripple.baseScale);
                 }
             });
         }
-        // Animate ripples where the water hits the bottom
+        // Animate impact ripples at the bottom (sprites)
         if (this.container.impactRipples) {
             this.container.impactRipples.forEach(ripple => {
                 if (ripple.delay > 0) {
                     ripple.delay -= dt;
+                    ripple.visible = false;
                     return;
                 }
-                ripple.radius += ripple.expandSpeed * dt;
-                const progress = ripple.radius / ripple.maxRadius;
-                const alpha = ripple.initialAlpha * (1 - progress);
-                ripple.clear();
-                if (ripple.radius < ripple.maxRadius && ripple.radius > 0) {
-                    ripple.circle(0, 0, ripple.radius);
-                    ripple.stroke({ width: 2, color: 0xffffff, alpha: alpha });
-                }
-                if (ripple.radius >= ripple.maxRadius) {
-                    ripple.radius = 0;
+                ripple.visible = true;
+                ripple.timer += dt;
+                // Expand and fade
+                let progress = ripple.timer * ripple.expandSpeed * 0.03;
+                if (progress > 1) progress = 1;
+                const scale = 0.1 + (ripple.maxScale - 0.1) * progress;
+                if (ripple.scale && typeof ripple.scale.set === 'function') ripple.scale.set(scale);
+                ripple.alpha = ripple.initialAlpha * (1 - progress);
+                if (progress >= 1) {
+                    ripple.timer = 0;
                     ripple.delay = Math.random() * 30;
                     ripple.x = (Math.random() - 0.5) * (this.container.waterfallHeight * 0.4);
                     ripple.y = Math.random() * (this.container.waterfallHeight * 0.15);

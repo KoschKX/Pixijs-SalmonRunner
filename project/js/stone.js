@@ -51,15 +51,23 @@ class Stone extends Sprite {
         waveContainer.zIndex = 3; // Waves below banks (10), above water (0)
         waveContainer.x = 0;
         waveContainer.y = 0;
-        for (let i = 0; i < 3; i++) {
-            const wave = new PIXI.Graphics();
-            wave.label = `wave${i}`;
-            wave.alpha = 0;
-            wave.startDelay = i * 20; // Stagger wave animation start
-            wave.lifetime = 0;
-            waveContainer.addChild(wave);
+        // Use ripple/water circle textures for waves
+        let rippleTextures = null;
+        if (window.ParticleManager && window.ParticleManager.textures && window.ParticleManager.textures.waterCircleFrames) {
+            rippleTextures = window.ParticleManager.textures.waterCircleFrames;
+        } else if (window.preloadedResources && window.preloadedResources.waterCircleFrames) {
+            rippleTextures = window.preloadedResources.waterCircleFrames;
         }
+        if (rippleTextures && !Array.isArray(rippleTextures)) {
+            rippleTextures = Object.values(rippleTextures);
+        }
+        if (rippleTextures) {
+            rippleTextures = rippleTextures.filter(t => t && (t.baseTexture || t.source));
+        }
+        // Use more waves and pass scale for radius
+        this.stoneWaves = window.ParticleManager.createStoneCircleWaves(waveContainer, 6, rippleTextures, scale);
         this.waveContainer = waveContainer;
+        this.addChild(waveContainer);
         this.sortableChildren = true;
         // Set a fallback hitbox immediately
         const fallbackHitbox = {
@@ -114,31 +122,10 @@ class Stone extends Sprite {
 
         // Stone stays at a fixed position in world space (no scrolling)
         // Sync wave container position with the stone
-        if (this.container.waveContainer) {
+        if (this.container.waveContainer && this.stoneWaves) {
             this.container.waveContainer.x = this.container.x;
             this.container.waveContainer.y = this.container.y;
-            // Update wave animations (3 per stone, no frame skipping needed)
-            this.container.waveContainer.children.forEach(wave => {
-                wave.lifetime++;
-                // Wait for the wave's start delay
-                if (wave.lifetime < wave.startDelay) return;
-                const age = wave.lifetime - wave.startDelay;
-                const maxAge = 120; // Wave lasts 2 seconds at 60fps
-                if (age > maxAge) {
-                    // Reset wave animation
-                    wave.lifetime = 0;
-                    wave.alpha = 0;
-                    return;
-                }
-                // Expand and fade out the wave
-                const progress = age / maxAge;
-                const radius = 20 + progress * 120; // Expand from 20 to 140 pixels
-                wave.alpha = (1 - progress) * 0.5; // Fade out
-                // Redraw the circle every frame
-                wave.clear();
-                wave.circle(0, 0, radius);
-                wave.stroke({ width: 2, color: 0xffffff, alpha: wave.alpha });
-            });
+            window.ParticleManager.animateStoneCircleWaves(this.stoneWaves);
         }
     }
 
