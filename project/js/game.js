@@ -19,19 +19,6 @@ if (!window.preloader.resources.some(r => r.url === waterCirclesJsonPath)) {
 }
 
 class Game {
-            // Detect mobile device (simple user agent check)
-            isMobileDevice() {
-                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            }
-        // Detect mobile device (simple user agent check)
-        isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
-
-        // Set mobile mode flag
-        setMobileMode() {
-            this.mobileMode = this.isMobileDevice();
-        }
     constructor(canvas) {
         this.canvas = canvas;
 
@@ -141,7 +128,19 @@ class Game {
         // Remove old key event bindings
     }
 
+    // Detect mobile device (simple user agent check)
+    isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+    // Detect mobile device (simple user agent check)
+    isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
 
+    // Set mobile mode flag
+    setMobileMode() {
+        this.mobileMode = this.isMobileDevice();
+    }
 
 
     togglePause() {

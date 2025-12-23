@@ -672,6 +672,13 @@ class ParticleManager {
         }
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
+            // Cull if out of view
+            let inView = true;
+            if (camera) {
+                inView = !(p.x < viewX - 64 || p.x > viewX + viewWidth + 64 || p.y < viewY - 64 || p.y > viewY + viewHeight + 64);
+                p.visible = inView;
+            }
+            if (!inView) continue;
             // Move the particle
             p.x += p.vx * dt;
             p.y += p.vy * dt;
@@ -694,14 +701,6 @@ class ParticleManager {
                 const s = 0.7 + 0.3 * fade;
                 p.scale.x = s;
                 p.scale.y = s;
-            }
-            // Cull if out of view
-            if (camera) {
-                if (p.x < viewX - 64 || p.x > viewX + viewWidth + 64 || p.y < viewY - 64 || p.y > viewY + viewHeight + 64) {
-                    p.visible = false;
-                } else {
-                    p.visible = true;
-                }
             }
             if (p.life <= 0) {
                 if (p instanceof PIXI.Sprite) {
