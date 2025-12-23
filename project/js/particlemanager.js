@@ -1,5 +1,3 @@
-
-
 class ParticleManager {
     /**
      * Get the maximum number of particles allowed (lower on mobile).
@@ -226,12 +224,29 @@ class ParticleManager {
         // Update foam particles: move, fade, and remove when done
         updateFoam(deltaTime = 1) {
             const dt = deltaTime * ParticleManager.DT;
+            // Get camera and viewport info
+            let camera = null, viewWidth = 0, viewHeight = 0, viewX = 0, viewY = 0;
+            if (window.game && window.game.camera && typeof window.game.camera.getPosition === 'function') {
+                camera = window.game.camera.getPosition();
+                viewWidth = window.game.config.width;
+                viewHeight = window.game.config.height;
+                viewX = camera.x - viewWidth / 2;
+                viewY = camera.y - viewHeight / 2;
+            }
             for (let i = this.foam.length - 1; i >= 0; i--) {
                 const f = this.foam[i];
                 f.x += f.vx * dt;
                 f.y += f.vy * dt;
                 f.life -= dt;
                 f.alpha *= Math.pow(0.96, ParticleManager.DT);
+                // Cull if out of view
+                if (camera) {
+                    if (f.x < viewX - 64 || f.x > viewX + viewWidth + 64 || f.y < viewY - 64 || f.y > viewY + viewHeight + 64) {
+                        f.visible = false;
+                    } else {
+                        f.visible = true;
+                    }
+                }
                 if (f.life <= 0 || f.alpha < 0.05) {
                     this.removeFoam(f);
                 }
@@ -646,6 +661,15 @@ class ParticleManager {
             this._debugFollowCircle.y = cam.y;
         }
         const dt = deltaTime * ParticleManager.DT;
+        // Get camera and viewport info
+        let camera = null, viewWidth = 0, viewHeight = 0, viewX = 0, viewY = 0;
+        if (window.game && window.game.camera && typeof window.game.camera.getPosition === 'function') {
+            camera = window.game.camera.getPosition();
+            viewWidth = window.game.config.width;
+            viewHeight = window.game.config.height;
+            viewX = camera.x - viewWidth / 2;
+            viewY = camera.y - viewHeight / 2;
+        }
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             // Move the particle
@@ -670,6 +694,14 @@ class ParticleManager {
                 const s = 0.7 + 0.3 * fade;
                 p.scale.x = s;
                 p.scale.y = s;
+            }
+            // Cull if out of view
+            if (camera) {
+                if (p.x < viewX - 64 || p.x > viewX + viewWidth + 64 || p.y < viewY - 64 || p.y > viewY + viewHeight + 64) {
+                    p.visible = false;
+                } else {
+                    p.visible = true;
+                }
             }
             if (p.life <= 0) {
                 if (p instanceof PIXI.Sprite) {
