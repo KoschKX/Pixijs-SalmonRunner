@@ -1,85 +1,78 @@
 class ParticleManager {
-    /**
-     * Get the maximum number of particles allowed (lower on mobile).
-     */
+    // Get the maximum number of particles allowed (lower on mobile)
     static getMaxParticles() {
         if (window.game && window.game.mobileMode) return 80;
         return 180;
     }
 
-    /**
-     * Get the maximum number of foam particles allowed (lower on mobile).
-     */
+    // Get the maximum number of foam particles allowed (lower on mobile)
     static getMaxFoam() {
         if (window.game && window.game.mobileMode) return 32;
         return 64;
     }
-        /**
-         * Create circular and concentric wave sprites for waterfall effects.
-         * Returns { circularWaves, concentricWaves } arrays.
-         * @param {PIXI.Container} waveWakes - Container to add waves to
-         * @param {Array} rippleTextures - Array of PIXI textures for ripples
-         * @param {number} riverWidth - Width of the river
-         */
-        static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
-            // Circular waves (smaller scale)
-            const circularWaves = [];
-            for (let i = 0; i < 15; i++) {
-                let sprite = null;
-                if (rippleTextures && rippleTextures.length > 0) {
-                    const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
-                    sprite = new PIXI.Sprite(tex);
-                    if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
-                } else {
-                    sprite = new PIXI.Graphics();
-                    sprite.circle(0, 0, 6);
-                    sprite.fill({ color: 0xffffff, alpha: 0.3 });
-                }
-                sprite.normalizedX = Math.random();
-                sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
-                sprite.y = Math.random() * 20 - 25;
-                sprite.radius = 0;
-                sprite.maxRadius = 25 + Math.random() * 20;
-                sprite.speed = 1.2 + Math.random() * 0.8;
-                sprite.delay = i * 4;
-                sprite.timer = 0;
-                sprite.baseScale = 0.08;
-                sprite.maxScale = sprite.maxRadius / 32;
-                sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
-                sprite.alpha = 0.6;
-                waveWakes.addChild(sprite);
-                circularWaves.push(sprite);
+
+    // Create circular and concentric wave sprites for waterfall effects
+    // Returns { circularWaves, concentricWaves } arrays
+    static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
+        // Circular waves (smaller scale)
+        const circularWaves = [];
+        for (let i = 0; i < 15; i++) {
+            let sprite = null;
+            if (rippleTextures && rippleTextures.length > 0) {
+                const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                sprite = new PIXI.Sprite(tex);
+                if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
+            } else {
+                sprite = new PIXI.Graphics();
+                sprite.circle(0, 0, 6);
+                sprite.fill({ color: 0xffffff, alpha: 0.3 });
             }
-            // Concentric waves (smaller scale)
-            const concentricWaves = [];
-            for (let i = 0; i < 8; i++) {
-                let sprite = null;
-                if (rippleTextures && rippleTextures.length > 0) {
-                    const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
-                    sprite = new PIXI.Sprite(tex);
-                    if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
-                } else {
-                    sprite = new PIXI.Graphics();
-                    sprite.circle(0, 0, 6);
-                    sprite.fill({ color: 0xffffff, alpha: 0.3 });
-                }
-                sprite.normalizedX = Math.random();
-                sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
-                sprite.y = Math.random() * 10 - 20;
-                sprite.radius = i * 10;
-                sprite.maxRadius = 70;
-                sprite.speed = 0.8;
-                sprite.delay = i * 6;
-                sprite.timer = 0;
-                sprite.baseScale = 0.08;
-                sprite.maxScale = sprite.maxRadius / 32;
-                sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
-                sprite.alpha = 0.7;
-                waveWakes.addChild(sprite);
-                concentricWaves.push(sprite);
-            }
-            return { circularWaves, concentricWaves };
+            sprite.normalizedX = Math.random();
+            sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
+            sprite.y = Math.random() * 20 - 25;
+            sprite.radius = 0;
+            sprite.maxRadius = 25 + Math.random() * 20;
+            sprite.speed = 1.2 + Math.random() * 0.8;
+            sprite.delay = i * 4;
+            sprite.timer = 0;
+            sprite.baseScale = 0.08;
+            sprite.maxScale = sprite.maxRadius / 32;
+            sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
+            sprite.alpha = 0.6;
+            waveWakes.addChild(sprite);
+            circularWaves.push(sprite);
         }
+        // Concentric waves (smaller scale)
+        const concentricWaves = [];
+        for (let i = 0; i < 8; i++) {
+            let sprite = null;
+            if (rippleTextures && rippleTextures.length > 0) {
+                const tex = rippleTextures[Math.floor(Math.random() * rippleTextures.length)];
+                sprite = new PIXI.Sprite(tex);
+                if (sprite.anchor && typeof sprite.anchor.set === 'function') sprite.anchor.set(0.5);
+            } else {
+                sprite = new PIXI.Graphics();
+                sprite.circle(0, 0, 6);
+                sprite.fill({ color: 0xffffff, alpha: 0.3 });
+            }
+            sprite.normalizedX = Math.random();
+            sprite.x = (sprite.normalizedX - 0.5) * riverWidth;
+            sprite.y = Math.random() * 10 - 20;
+            sprite.radius = i * 10;
+            sprite.maxRadius = 70;
+            sprite.speed = 0.8;
+            sprite.delay = i * 6;
+            sprite.timer = 0;
+            sprite.baseScale = 0.08;
+            sprite.maxScale = sprite.maxRadius / 32;
+            sprite.scale.set(sprite.baseScale, sprite.baseScale * 0.6);
+            sprite.alpha = 0.7;
+            waveWakes.addChild(sprite);
+            concentricWaves.push(sprite);
+        }
+        return { circularWaves, concentricWaves };
+    }
+
     static textures = {};
     static lastSummaryLog = 0;
     static FPS = 30;

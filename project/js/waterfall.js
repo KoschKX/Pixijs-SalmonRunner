@@ -601,6 +601,10 @@ class Waterfall {
 
     // Call this once after creating your PIXI.Application
     static generateSplashTextures(renderer) {
+        if (!renderer || typeof renderer.generateTexture !== 'function') {
+            console.warn('[Waterfall] Skipping splash texture generation: renderer is null or invalid.');
+            return;
+        }
         Waterfall.splashTextures = [];
         for (let size = 1; size <= 3; size++) {
             const g = new PIXI.Graphics();

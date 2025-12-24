@@ -1,45 +1,32 @@
-// game.js
-// Main Game class: handles initialization, game loop, and cleanup
-// Input class is loaded globally via <script> in index.html
+
 let romanticSequence = null;
-// Ensure the particle spritesheet is preloaded before the game starts
-if (!window.preloader || typeof window.preloader.add !== 'function' || !(window.preloader instanceof Preloader)) {
-    window.preloader = new Preloader();
-}
-// Force foam/splash atlas files to be present at the very start
-const foamJsonPath = 'assets/generated/foam_splash_particles.json';
-const foamPngPath = 'assets/generated/foam_splash_particles.png';
-window.preloader.resources = window.preloader.resources.filter(r => r.url !== foamJsonPath && r.url !== foamPngPath);
-window.preloader.add('spritesheet', foamJsonPath, 'foam_splash_particles_json');
-window.preloader.add('spritesheet', foamPngPath, 'foam_splash_particles_png');
-// Preload water circles atlas (if still needed elsewhere)
-const waterCirclesJsonPath = 'assets/generated/water_circles.json';
-if (!window.preloader.resources.some(r => r.url === waterCirclesJsonPath)) {
-    window.preloader.add('spritesheet', waterCirclesJsonPath, 'water_circles');
-}
+const overlayManager = new OverlayManager();
+window.renderer = new Renderer();
+
+if (!window.preloader || typeof window.preloader.add !== 'function' || !(window.preloader instanceof Preloader)) window.preloader = new Preloader();
+Preloader.setupDefaultResources(window.preloader);
 
 class Game {
     constructor(canvas) {
         this.canvas = canvas;
 
-        // Game configuration settings
         this.config = {
             width: 1000,
             height: 1000,
             backgroundColor: 0x0066cc,
             scrollSpeed: 7.5,
-            originalScrollSpeed: 7.5, // For restoring scroll speed
+            originalScrollSpeed: 7.5,
             playerSpeed: 5,
             playerAcceleration: 0.5,
             playerMaxSpeed: 10,
             playerFriction: 0.85,
             currentPullDown: 2,
-            dashSpeed: 24, // Forward dash speed
-            dashDuration: 300, // Forward dash duration
-            dashCooldown: 500, // Forward dash cooldown
-            backDashSpeed: 24, // Backward dash speed
-            backDashDuration: 150, // Backward dash duration
-            backDashCooldown: 500, // Backward dash cooldown
+            dashSpeed: 24,
+            dashDuration: 300,
+            dashCooldown: 500,
+            backDashSpeed: 24,
+            backDashDuration: 150,
+            backDashCooldown: 500,
             spawnInterval: 120,
             goalDistance: 1000,
             riverWidth: 300,
@@ -47,30 +34,20 @@ class Game {
             bankColor: 0xd4a017
         };
 
-        // PixiJS Application instance
         this.app = null;
-
-        // Main game objects
         window.particleManager = null;
         this.world = null;
         this.camera = null;
         this.river = null;
         this.obstacles = [];
-        // Particle manager
         this.particleManager = null;
         this.riverBanks = [];
         this.waterfalls = [];
         this.riverIslands = [];
         this.wakeTrail = [];
-
-        // Fade overlay for transitions
         this.fadeOverlay = null;
-        
-        // Store original z-indexes for reset
         this.originalPlayerZIndex = 14;
         this.originalGoalZIndex = 13;
-
-        // Game state variables
         this.gameState = {
             health: 100,
             distance: 0,
@@ -94,54 +71,26 @@ class Game {
             birdCount: 0,
             bearCount: 0,
         };
-
-        // RomanticSequence instance
         this.romanticSequence = new window.RomanticSequence(this);
-
-        // Input handler
-        this.input = new Input();
-
-        // Hitbox data
+        this.input = new InputManager();
         this.bearWalkHitboxData = null;
         this.bearEatHitboxData = null;
-
-        // Audio manager
         this.audioManager = new AudioManager();
-
-        // Frame limiting
         this.lastFrameTime = 0;
         this.targetFPS = 60;
-        this.frameInterval = 60 / this.targetFPS; // Milliseconds per frame
-
-        // Intervals and timers
+        this.frameInterval = 60 / this.targetFPS;
         this.spawnInterval = null;
         this.pendingTimeouts = [];
 
-        // SpawnManager instance
         this.spawnManager = new window.SpawnManager(this);
-
-        // Frame counter for throttling updates
         this.frameCounter = 0;
-
-        // Bind methods to this instance
         this.gameLoop = this.gameLoop.bind(this);
-        // Remove old key event bindings
     }
 
-    // Detect mobile device (simple user agent check)
-    isMobileDevice() {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    }
-    // Detect mobile device (simple user agent check)
-    isMobileDevice() {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    }
-
-    // Set mobile mode flag
+    
     setMobileMode() {
-        this.mobileMode = this.isMobileDevice();
+        this.mobileMode = isMobileDevice();
     }
-
 
     togglePause() {
         if (this.gameState.paused) {
@@ -180,12 +129,12 @@ class Game {
         if (typeof hud !== 'undefined' && hud && typeof hud.setPauseState === 'function') hud.setPauseState(false);
     }
     isInitialized = false;
-    // Preload all resources before starting the game
+    
     async preloadResources() {
-        // Use global preloader and preloaded resources
+        
         const resources = window.preloadedResources || await window.preloader.preloadAll();
 
-        // Assign textures
+        
         this.riverbedTex = resources['riverbed_B'];
         this.foliageTex = resources['riverfoliage'];
         this.salmonTex = resources['salmon'];
@@ -195,39 +144,39 @@ class Game {
         this.birdGlideTex = resources['bird_glide'];
         this.birdFlapTex = resources['bird_flap'];
 
-        // HUD images
+        
         this.hudWinTex = resources['hud_win'];
         this.hudLoseTex = resources['hud_lose'];
 
-        // Hitbox data
+        
         this.bearWalkHitboxData = resources['bear_walk_hitbox'];
         this.bearEatHitboxData = resources['bear_eat_hitbox'];
         this.birdGlideHitboxData = resources['bird_glide_hbox'];
         this.birdFlapHitboxData = resources['bird_flap_hbox'];
         this.rockHitboxData = resources['rock_hbox'] || null;
 
-        // Assign preloaded audio to AudioManager
+        
         this.audioManager.splashSounds = [
-            preloader.resources['splash_A'],
-            preloader.resources['splash_B'],
-            preloader.resources['splash_C'],
-            preloader.resources['splash_D']
+            resources['splash_A'],
+            resources['splash_B'],
+            resources['splash_C'],
+            resources['splash_D']
         ].filter(Boolean);
         this.audioManager.lateralSplashSounds = [
-            preloader.resources['lateral_splash_A'],
-            preloader.resources['lateral_splash_B']
+            resources['lateral_splash_A'],
+            resources['lateral_splash_B']
         ].filter(Boolean);
-        this.audioManager.kissSound = preloader.resources['kiss_A'];
-        this.audioManager.jingleSound = preloader.resources['jingle_A'];
+        this.audioManager.kissSound = resources['kiss_A'];
+        this.audioManager.jingleSound = resources['jingle_A'];
 
-        // Ensure Bird assets are loaded before creating birds
+        
         await Bird.initAssets(resources);
         await Fish.initAssets(resources);
         await Bear.initAssets(resources);
         await Stone.initAssets(resources);
     }
     updateObstacles() {
-        // Remove destroyed birds and update birdCount
+        
         this.obstacles = this.obstacles.filter(obs => {
             if (obs.type === 'bird' && obs.destroyed) {
                 this.gameState.birdCount = Math.max(0, this.gameState.birdCount - 1);
@@ -236,33 +185,20 @@ class Game {
             return true;
         });
     }
-    // Debounced window resize handler
+    
     setupDebouncedResize() {
-        let resizeTimeout = null;
-        window.addEventListener('resize', () => {
-            if (resizeTimeout) clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                this.handleResize();
-            }, 250); // Only run after 250ms of no resize
-        });
+        setupDebouncedResize(() => this.handleResize());
     }
 
-    // Handle window resizing
+    
     handleResize() {
-        if (this.app && this.config) {
-            const width = window.innerWidth || this.config.width;
-            const height = window.innerHeight || this.config.height;
-            this.app.renderer.resize(width, height);
-            this.config.width = width;
-            this.config.height = height;
-            // Optionally update camera or other elements here
-        }
+        handleResize(this.config, renderer);
     }
-    // Prevent crash on restart (no-op)
+    
     stopCameraLoop() {}
 
     async createGoal() {
-        // Use Fish class static method to create animated goal fish
+        
         const goalContainer = await Fish.createGoalFish();
 
         goalContainer.x = this.config.width / 2;
@@ -270,9 +206,9 @@ class Game {
         goalContainer.label = 'goal';
         goalContainer.zIndex = this.originalGoalZIndex;
 
-        goalContainer.cacheAsBitmap = true; // Optimize static goal
+        goalContainer.cacheAsBitmap = true;
         this.world.addChild(goalContainer);
-        // Only set sortableChildren once, not every time
+        
         if (!this.world.sortableChildren) this.world.sortableChildren = true;
     }
 
@@ -280,14 +216,9 @@ class Game {
         this.input.setup();
     }
 
-    // Input event handlers are now managed by Input class
-
     playRandomSplash() {
         this.audioManager.playRandomSplash();
     }
-
-
-    // ...spawning functions moved to SpawnManager.js...
 
     createBear() {
         const bear = new Bear();
@@ -296,7 +227,7 @@ class Game {
 
     createBird() {
         const bird = new Bird(this.config.height);
-        // Ensure bird container is always added to the world and visible
+        
         const birdContainer = bird.getContainer();
         birdContainer.zIndex = 16;
         birdContainer.visible = true;
@@ -305,87 +236,55 @@ class Game {
         }
         return bird;
     }
-    // Set up and start the game
+    
     async init() {
-        // Performance: lower renderer resolution and max particles on mobile
-        this.isMobile = this.isMobileDevice();
-        // Lower max particles/foam for mobile
+        
+        this.isMobile = isMobileDevice();
+        
         if (this.isMobile && window.ParticleManager) {
             window.ParticleManager.getMaxParticles = () => 60;
             window.ParticleManager.getMaxFoam = () => 24;
         }
-        // Lower PixiJS renderer resolution for mobile
+        
         const resolution = this.isMobile ? 1 : window.devicePixelRatio || 1;
-        // If app not created, create with optimized settings
+        
         if (!this.app) {
-            this.app = new PIXI.Application();
-            await this.app.init({
+            this.app = await window.renderer.create({
                 canvas: this.canvas,
                 width: this.config.width,
                 height: this.config.height,
                 backgroundColor: this.config.backgroundColor,
                 targetFrameRate: this.isMobile ? 45 : 60,
-                clearBeforeRender: true,
                 antialias: false,
                 resolution: resolution,
-                autoDensity: true,
                 powerPreference: 'low-power',
+                maxFPS: this.isMobile ? 45 : 60
             });
-            // Limit FPS for mobile
-            this.app.ticker.maxFPS = this.isMobile ? 45 : 60;
-            // Optional: frame time logging for debugging
-            this.frameTimeLog = false; // set to true to enable
+            
+            this.frameTimeLog = false;
             if (this.frameTimeLog) {
                 let last = performance.now();
                 this.app.ticker.add(() => {
                     const now = performance.now();
                     const dt = now - last;
                     last = now;
-                    if (dt > 20) console.log('Frame time:', dt.toFixed(2), 'ms');
+                    if (dt > 20) {} // removed debug log
                 });
+            }
+            
+            if (window.hudManager && typeof window.hudManager.addFadeOverlay === 'function') {
+                window.hudManager.addFadeOverlay(this.world, this.config.width, this.config.height);
             }
         }
         this.setMobileMode();
-        // Create Pixi Application if needed
-        if (!this.app) {
-            this.app = new PIXI.Application();
-            await this.app.init({
-                canvas: this.canvas,
-                width: this.config.width,
-                height: this.config.height,
-                backgroundColor: this.config.backgroundColor,
-                targetFrameRate: 60,
-                clearBeforeRender: true,
-                antialias: false
-            });
-        }
 
-        // Preload all resources (including foam/splash PNGs)
+        
         await this.preloadResources();
 
-        // Wait for particle frames to be valid before creating waterfalls/particles
-        function areParticleFramesValid() {
-            const frames = window.preloadedResources && window.preloadedResources.particleFrames;
-            if (!frames) return false;
-            const keys = Object.keys(frames);
-            return keys.length > 0 && keys.every(k => {
-                const t = frames[k];
-                return t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0));
-            });
-        }
-        async function waitForParticleFramesValid(maxWaitMs = 2000) {
-            const start = Date.now();
-            while (!areParticleFramesValid()) {
-                if (Date.now() - start > maxWaitMs) break;
-                await new Promise(r => setTimeout(r, 50));
-            }
-        }
-        await waitForParticleFramesValid(3000); // Wait up to 3 seconds for textures
-
-        // Now safe to create waterfalls, particles, etc.
+        
         if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
             ParticleManager.generateParticleTextures();
-            // Debug log: check loaded splash/foam textures
+            
             if (window.ParticleManager && window.ParticleManager.textures) {
                 const keys = Object.keys(window.ParticleManager.textures);
                 const summary = keys.map(k => {
@@ -394,15 +293,15 @@ class Game {
                     if (t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0))) valid = true;
                     return `${k}: ${valid ? 'OK' : 'INVALID'}`;
                 });
-                console.log('[ParticleManager] Loaded particle textures:', summary.join(', '));
+                // removed debug log
             }
         }
-        // Generate pre-rendered waterfall splash textures
+        
         if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
             Waterfall.generateSplashTextures(this.app.renderer);
         }
-        // Reset all game state values
-        this.gameState = {
+        
+        this.gameState = new GameState({
             health: 100,
             distance: 0,
             score: 0,
@@ -427,9 +326,9 @@ class Game {
             birdCount: 0,
             bearCount: 0,
             romanticSceneActive: false
-        };
+        });
 
-        // Create Pixi Application if needed
+        
         if (!this.app) {
             this.app = new PIXI.Application();
             await this.app.init({
@@ -443,45 +342,48 @@ class Game {
             });
         }
 
-        // Clear and render initial background
+        
         if (this.app && this.app.renderer) {
             this.app.renderer.backgroundColor = this.config.backgroundColor;
             this.app.renderer.clear();
             this.app.renderer.render(this.app.stage);
         }
 
-        // Create world container
-        this.world = new PIXI.Container();
-        this.world.sortableChildren = true;
-        this.app.stage.addChild(this.world);
+        
+        if (!this.app.stage) {
+            
+            this.app = await renderer.create({
+                canvas: this.canvas,
+                width: this.config.width,
+                height: this.config.height,
+                backgroundColor: this.config.backgroundColor,
+                targetFrameRate: this.isMobile ? 45 : 60,
+                antialias: false,
+                resolution: this.isMobile ? 1 : window.devicePixelRatio || 1,
+                powerPreference: 'low-power',
+                maxFPS: this.isMobile ? 45 : 60
+            });
+        }
+        this.sceneManager = new SceneManager(this.app);
+        this.world = this.sceneManager.createWorld();
 
-        // Add fade overlay (hidden by default)
+        
         this.fadeOverlay = new PIXI.Graphics();
         this.fadeOverlay.rect(0, 0, this.config.width, this.config.height);
         this.fadeOverlay.fill(0x000000);
         this.fadeOverlay.alpha = 0;
-        this.fadeOverlay.zIndex = 500; // High z-index, will be below fish when they bump to 1000
+        this.fadeOverlay.zIndex = 500;
         this.world.addChild(this.fadeOverlay);
 
-        // Render once to avoid blank frames
         this.app.renderer.render(this.app.stage);
-
-
-
-
-
-        // Set up camera
+        
         this.camera = new Camera(this.world, this.config);
 
-        // Set up river, banks, waterfalls, and islands
-        this.river = new River(this.world, this.config, this.app.renderer);
-        this.riverBanks = this.river.getBanks();
-        // (Optional) Optimize river banks for performance
-
-        // Create river islands
-        await this.river.createRiverIslands();
-
-        // Set up particle effects
+        // Modular river system: all logic via River API
+        this.river = River.create(this.world, this.config, this.app.renderer);
+        this.riverBanks = River.getBanks(this.river);
+        await River.createRiverIslands(this.river);
+        
         this.particleManager = new ParticleManager(
             this.world,
             this.config,
@@ -489,10 +391,10 @@ class Game {
         );
         window.particleManager = this.particleManager;
 
-        // Create player fish
+        
         this.createPlayer();
 
-        // Store initial player position for distance tracking
+        
         const initialPlayerPos = this.player.getPosition();
         this.gameState.startY = initialPlayerPos.y;
 
@@ -501,38 +403,38 @@ class Game {
         this.camera.setPosition(cameraX, playerPos.y);
         this.camera.setTarget(cameraX, playerPos.y);
 
-        // Attach wake effect to player
-        const wakeGraphics = this.river.getWakeGraphics();
+        
+        const wakeGraphics = River.getWakeGraphics(this.river);
         if (wakeGraphics) {
             this.player.setWakeGraphics(wakeGraphics);
         }
 
         await this.createGoal();
 
-        // Set up controls (after particles)
+        
         this.setupControls();
 
-        // Limit FPS for smoother performance
+        
         this.app.ticker.maxFPS = 60;
         this.app.ticker.minFPS = 30;
         this.app.ticker.add(this.gameLoop);
 
         this.spawnInterval = setInterval(() => this.spawnManager.spawnObstaclePattern(), 2000);
 
-        // Game is ready
+        
         window.gameReady = true;
     }
 
 
     createPlayer() {
-        this.player = new Fish(this.config.width / 2, 0, this.config);
-        const playerContainer = this.player.getContainer();
+        this.player = window.Player.create(this.config.width / 2, 0, this.config);
+        const playerContainer = window.Player.getContainer(this.player);
         playerContainer.zIndex = this.originalPlayerZIndex;
         this.world.addChild(playerContainer);
     }
 
     async createGoal() {
-        // Use Fish class static method to create animated goal fish
+        
         const goalContainer = await Fish.createGoalFish();
 
         goalContainer.x = this.config.width / 2;
@@ -548,7 +450,7 @@ class Game {
         this.input.setup();
     }
 
-    // Input event handlers are now managed by Input class
+    
 
     playRandomSplash() {
         this.audioManager.playRandomSplash();
@@ -602,7 +504,7 @@ class Game {
     }
 
     gameLoop(delta) {
-        // --- Tap-to-move: move fish to targetX (one-time) ---
+        
         if (this.input.targetX !== null && this.player) {
             const playerX = this.player.x;
             const dx = this.input.targetX - playerX;
@@ -615,140 +517,141 @@ class Game {
             }
         }
 
-                // --- Swipe up/down for dashing ---
-                if (this.input.keys['swipeUp']) {
-                    // Simulate dash up (with possible horizontal component)
-                    if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-                        const now = Date.now();
-                        if (now - this.gameState.lastDashTime >= this.config.dashCooldown) {
-                            // Calculate dash duration based on swipe distance (capped)
-                            let dashDuration = this.config.dashDuration;
-                            let vx = 0, vy = 0;
-                            if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
-                                const minSwipe = 40; // threshold
-                                const maxSwipe = 400; // max effective swipe
-                                const minDuration = this.config.dashDuration * 0.5;
-                                const maxDuration = this.config.dashDuration * 2.5;
-                                const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
-                                dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
-                                // Calculate angle and set both vx and vy
-                                const dx = this.input.swipeEndX - this.input.swipeStartX;
-                                const dy = this.input.swipeEndY - this.input.swipeStartY;
-                                const angle = Math.atan2(dy, dx);
-                                // Up is negative Y, so invert for dash
-                                const speed = this.config.dashSpeed;
-                                vx = Math.cos(angle) * speed;
-                                vy = Math.sin(angle) * speed;
-                                // Clamp vy to be at least 60% of dashSpeed upward
-                                if (vy > -speed * 0.6) vy = -speed * 0.6;
-                            } else {
-                                vy = -this.config.dashSpeed;
-                            }
-                            this.gameState.isDashing = true;
-                            this.gameState.dashDirection = 'forward';
-                            this.gameState.dashEndTime = now + dashDuration;
-                            this.gameState.lastDashTime = now;
-                            if (this.player) {
-                                this.player.isInvincible = true;
-                                this.player.invincibilityEndTime = 0;
-                                this.gameState.playerVelocityX = vx;
-                                this.gameState.playerVelocityY = vy;
-                            }
-                            this.playRandomSplash();
-                        }
+        
+        if (this.input.keys['swipeUp']) {
+            
+            if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+                const now = Date.now();
+                if (now - this.gameState.lastDashTime >= this.config.dashCooldown) {
+                    
+                    let dashDuration = this.config.dashDuration;
+                    let vx = 0, vy = 0;
+                    if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
+                        const minSwipe = 40;
+                        const maxSwipe = 400;
+                        const minDuration = this.config.dashDuration * 0.5;
+                        const maxDuration = this.config.dashDuration * 2.5;
+                        const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
+                        dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
+                        
+                        const dx = this.input.swipeEndX - this.input.swipeStartX;
+                        const dy = this.input.swipeEndY - this.input.swipeStartY;
+                        const angle = Math.atan2(dy, dx);
+                        
+                        const speed = this.config.dashSpeed;
+                        vx = Math.cos(angle) * speed;
+                        vy = Math.sin(angle) * speed;
+                        
+                        if (vy > -speed * 0.6) vy = -speed * 0.6;
+                    } else {
+                        vy = -this.config.dashSpeed;
                     }
-                    this.input.keys['swipeUp'] = false;
-                    this.input.swipeHorizontal = null;
-                    this.input.swipeDistance = null;
-                    this.input.swipeStartX = undefined;
-                    this.input.swipeStartY = undefined;
-                    this.input.swipeEndX = undefined;
-                    this.input.swipeEndY = undefined;
-                }
-                if (this.input.keys['swipeDown']) {
-                    // Simulate dash down (with possible horizontal component)
-                    if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
-                        const now = Date.now();
-                        if (now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
-                            // Calculate dash duration based on swipe distance (capped)
-                            let dashDuration = this.config.backDashDuration;
-                            let vx = 0, vy = 0;
-                            if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
-                                const minSwipe = 40;
-                                const maxSwipe = 400;
-                                const minDuration = this.config.backDashDuration * 0.5;
-                                const maxDuration = this.config.backDashDuration * 2.5;
-                                const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
-                                dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
-                                // Calculate angle and set both vx and vy
-                                const dx = this.input.swipeEndX - this.input.swipeStartX;
-                                const dy = this.input.swipeEndY - this.input.swipeStartY;
-                                const angle = Math.atan2(dy, dx);
-                                const speed = this.config.backDashSpeed;
-                                vx = Math.cos(angle) * speed;
-                                vy = Math.sin(angle) * speed;
-                                // Clamp vy to be at least 60% of backDashSpeed downward
-                                if (vy < speed * 0.6) vy = speed * 0.6;
-                            } else {
-                                vy = this.config.backDashSpeed;
-                            }
-                            this.gameState.isDashing = true;
-                            this.gameState.dashDirection = 'backward';
-                            this.gameState.dashEndTime = now + dashDuration;
-                            this.gameState.lastDashTime = now;
-                            if (this.player) {
-                                this.player.isInvincible = true;
-                                this.player.invincibilityEndTime = 0;
-                                this.gameState.playerVelocityX = vx;
-                                this.gameState.playerVelocityY = vy;
-                            }
-                            this.playRandomSplash();
-                        }
+                    this.gameState.isDashing = true;
+                    this.gameState.dashDirection = 'forward';
+                    this.gameState.dashEndTime = now + dashDuration;
+                    this.gameState.lastDashTime = now;
+                    if (this.player) {
+                        this.player.isInvincible = true;
+                        this.player.invincibilityEndTime = 0;
+                        this.gameState.playerVelocityX = vx;
+                        this.gameState.playerVelocityY = vy;
                     }
-                    this.input.keys['swipeDown'] = false;
-                    this.input.swipeHorizontal = null;
-                    this.input.swipeDistance = null;
-                    this.input.swipeStartX = undefined;
-                    this.input.swipeStartY = undefined;
-                    this.input.swipeEndX = undefined;
-                    this.input.swipeEndY = undefined;
+                    this.playRandomSplash();
                 }
+            }
+            this.input.keys['swipeUp'] = false;
+            this.input.swipeHorizontal = null;
+            this.input.swipeDistance = null;
+            this.input.swipeStartX = undefined;
+            this.input.swipeStartY = undefined;
+            this.input.swipeEndX = undefined;
+            this.input.swipeEndY = undefined;
+        }
+        if (this.input.keys['swipeDown']) {
+            
+            if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+                const now = Date.now();
+                if (now - this.gameState.lastDashTime >= this.config.backDashCooldown) {
+                    
+                    let dashDuration = this.config.backDashDuration;
+                    let vx = 0, vy = 0;
+                    if (this.input.swipeDistance && this.input.swipeStartX !== undefined && this.input.swipeStartY !== undefined) {
+                        const minSwipe = 40;
+                        const maxSwipe = 400;
+                        const minDuration = this.config.backDashDuration * 0.5;
+                        const maxDuration = this.config.backDashDuration * 2.5;
+                        const clamped = Math.max(minSwipe, Math.min(maxSwipe, this.input.swipeDistance));
+                        dashDuration = minDuration + (maxDuration - minDuration) * ((clamped - minSwipe) / (maxSwipe - minSwipe));
+                        
+                        const dx = this.input.swipeEndX - this.input.swipeStartX;
+                        const dy = this.input.swipeEndY - this.input.swipeStartY;
+                        const angle = Math.atan2(dy, dx);
+                        const speed = this.config.backDashSpeed;
+                        vx = Math.cos(angle) * speed;
+                        vy = Math.sin(angle) * speed;
+                        
+                        if (vy < speed * 0.6) vy = speed * 0.6;
+                    } else {
+                        vy = this.config.backDashSpeed;
+                    }
+                    this.gameState.isDashing = true;
+                    this.gameState.dashDirection = 'backward';
+                    this.gameState.dashEndTime = now + dashDuration;
+                    this.gameState.lastDashTime = now;
+                    if (this.player) {
+                        this.player.isInvincible = true;
+                        this.player.invincibilityEndTime = 0;
+                        this.gameState.playerVelocityX = vx;
+                        this.gameState.playerVelocityY = vy;
+                    }
+                    this.playRandomSplash();
+                }
+            }
+            this.input.keys['swipeDown'] = false;
+            this.input.swipeHorizontal = null;
+            this.input.swipeDistance = null;
+            this.input.swipeStartX = undefined;
+            this.input.swipeStartY = undefined;
+            this.input.swipeEndX = undefined;
+            this.input.swipeEndY = undefined;
+        }
+        
         if (this.gameState.gameOver && !this.gameState.won) return;
 
-        // Frame limiting logic
+        
         const now = performance.now();
         if (!this.lastFrameTime) this.lastFrameTime = now;
         const elapsed = now - this.lastFrameTime;
         if (elapsed < this.frameInterval) {
-            return; // Skip this frame if not enough time has passed
+            return;
         }
         this.lastFrameTime = now;
 
-        // Use Pixi's delta time directly
+        
         const actualDelta = delta.deltaTime;
 
-        // Cache player position to avoid repeated getPosition() calls
+        
         let playerPos = (this.player && typeof this.player.getPosition === 'function') ? this.player.getPosition() : {x: this.config.width/2, y: 0};
 
-        // Update camera target and position with correct delta
+        
         if (this.camera && this.player) {
             const cameraX = this.config.width / 2;
             this.camera.setTarget(cameraX, playerPos.y);
             this.camera.update(actualDelta);
         }
 
-        // Increment frame counter
+        
         this.frameCounter++;
 
         if (!this.gameState.won) {
             const now = Date.now();
-            // Set isJumping state for the fish when dashing forward
+            
             if (this.gameState.isDashing && this.gameState.dashDirection === 'forward') {
                 this.player.isJumping = true;
             } else {
                 this.player.isJumping = false;
             }
-            // End dash early if key is released (shorten dash duration by 40%)
+            
             if (this.gameState.isDashing) {
                 let dashKeyHeld = false;
                 if (this.gameState.dashDirection === 'forward') {
@@ -757,10 +660,10 @@ class Game {
                     dashKeyHeld = this.input.keys['ArrowDown'] || this.input.keys['s'] || this.input.keys['S'];
                 }
                 if (!dashKeyHeld && !this.gameState.dashShortened) {
-                    // Shorten dash duration by 40% if released early (once per dash)
+                    
                     const nowTime = Date.now();
                     const remaining = this.gameState.dashEndTime - nowTime;
-                    if (remaining > 30) { // Only shorten if there's time left
+                    if (remaining > 30) {
                         this.gameState.dashEndTime = nowTime + Math.floor(remaining * 0.4);
                         this.gameState.dashShortened = true;
                     }
@@ -768,21 +671,21 @@ class Game {
                 if (now >= this.gameState.dashEndTime) {
                     this.gameState.isDashing = false;
                     this.gameState.dashShortened = false;
-                    // Always clear invincibility at end of any dash
+                    
                     if (this.player) {
                         this.player.isInvincible = false;
                         this.player.invincibilityEndTime = 0;
                     }
-                    // Reset scale to 1x ONLY for forward dash
+                    
                     if (this.gameState.dashDirection === 'forward' && this.player && this.player.mesh) {
                         this.player.mesh.scale.set(this.player.meshScale);
                     }
-                    // Always restore zIndex after dash ends
+                    
                     if (this.player) {
                         const playerContainer = this.player.getContainer();
                         playerContainer.zIndex = this.originalPlayerZIndex;
                     }
-                    // Create a splash effect at the player's position
+                    
                     const pos = this.player.getPosition();
                     if (this.gameState.dashDirection === 'backward') {
                         if (window.particleManager) {
@@ -796,19 +699,19 @@ class Game {
                 }
             }
 
-            // Movement
+            
             let targetVelocityX = 0;
             let targetVelocityY = -this.config.scrollSpeed;
 
-            // Bounce lockout disables normal movement for a short time after hitting a waterfall
+            
             if (this.gameState.bounceLockout) {
-                // Allow dashing (forward or backward) to break the bounce lockout at any point (easing or pause)
+                
                 let dashDir = null;
                 if ((this.input.keys['ArrowUp'] || this.input.keys['w'] || this.input.keys['W'])) dashDir = 'forward';
                 if ((this.input.keys['ArrowDown'] || this.input.keys['s'] || this.input.keys['S'])) dashDir = 'backward';
                 const now = Date.now();
                 if (dashDir && !this.gameState.isDashing) {
-                    // End lockout, easing, and pause immediately if dash is triggered
+                    
                     this.gameState.bounceLockout = false;
                     this.gameState.bounceEasing = false;
                     this.gameState.bounceVelocityY = null;
@@ -817,7 +720,7 @@ class Game {
                     this.gameState.bounceDuration = null;
                     this.gameState.bouncePause = null;
                     this.gameState.bounceInitialVelocityY = null;
-                    // Immediately trigger dash in the correct direction
+                    
                     if (dashDir === 'forward' && now - this.gameState.lastDashTime >= this.config.dashCooldown) {
                         this.gameState.isDashing = true;
                         this.gameState.dashDirection = 'forward';
@@ -840,11 +743,11 @@ class Game {
                         this.playRandomSplash();
                     }
                 } else {
-                    // Easing bounce: ease out, then pause
+                    
                     if (this.gameState.bounceEasing && typeof this.gameState.bounceInitialVelocityY === 'number') {
                         const elapsed = Date.now() - (this.gameState.bounceStartTime || 0);
                         const t = Math.min(1, elapsed / (this.gameState.bounceDuration || 1));
-                        // Ease out: velocityY = initial * (1-t)^2 (quadratic ease out)
+                        
                         this.gameState.bounceVelocityY = this.gameState.bounceInitialVelocityY * Math.pow(1 - t, 2);
                     }
                     if (typeof this.gameState.bounceVelocityY === 'number') {
@@ -857,7 +760,7 @@ class Game {
                     targetVelocityY = this.gameState.playerVelocityY;
                 }
             } 
-            // --- Dash key trigger logic outside of bounce lockout ---
+            
             else if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
                 const now = Date.now();
                 if ((this.input.keys['ArrowUp'] || this.input.keys['w'] || this.input.keys['W']) && now - this.gameState.lastDashTime >= this.config.dashCooldown) {
@@ -882,49 +785,49 @@ class Game {
                     this.playRandomSplash();
                 }
             } else {
-                // Dash overrides normal movement
+                
                 if (this.gameState.isDashing) {
                     if (this.gameState.dashDirection === 'forward') {
-                        // Animate scale for jump effect ONLY for forward dash
+                        
                         const dashElapsed = (now - (this.gameState.dashEndTime - this.config.dashDuration)) / this.config.dashDuration;
                         let scale = 1;
                         if (dashElapsed < 0.5) {
-                            // Scale up to 2x at midpoint
+                            
                             scale = 1 + dashElapsed * 2;
                         } else {
-                            // Scale back down to 1x
+                            
                             scale = 2 - (dashElapsed - 0.5) * 2;
                         }
                         if (this.player && this.player.mesh) {
                             this.player.mesh.scale.set(this.player.meshScale * scale);
-                            // Set zIndex above bears ONLY if isJumping AND scale > 1.25, else always restore
+                            
                             const playerContainer = this.player.getContainer();
                             if (this.player.isJumping && (this.player.meshScale * scale) > 1.25) {
-                                playerContainer.zIndex = 16; // Bears are 15, birds 16
+                                playerContainer.zIndex = 16;
                             } else {
                                 playerContainer.zIndex = this.originalPlayerZIndex;
                             }
                         }
                         targetVelocityY = -this.config.dashSpeed;
                     } else if (this.gameState.dashDirection === 'backward') {
-                        // NO scale animation for back dash
+                        
                         targetVelocityY = this.config.backDashSpeed;
-                        // --- Minimal left/right control for back dash ---
+                        
                         if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
-                            targetVelocityX = -this.config.playerMaxSpeed * 0.45; // Minimal boost for back dash
+                            targetVelocityX = -this.config.playerMaxSpeed * 0.45;
                         } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                             targetVelocityX = this.config.playerMaxSpeed * 0.45;
                         } else {
                             targetVelocityX = 0;
                         }
-                        // Slightly increased acceleration for back dash
+                        
                         var backDashAccel = this.config.playerAcceleration * 1.1;
                         this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * backDashAccel * actualDelta;
                     }
                 } else {
-                    // Deadzone: ignore left/right input while dashing (except minimal back dash control)
+                    
                     if (this.gameState.isDashing) {
-                        // For forward/right/left dash, no left/right input allowed
+                        
                         if (this.gameState.dashDirection !== 'backward') {
                             targetVelocityX = 0;
                         } else {
@@ -979,29 +882,23 @@ class Game {
             this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * jumpAccel * actualDelta;
 
             let newX = playerPos.x + this.gameState.playerVelocityX * actualDelta;
-
             let newY = playerPos.y + this.gameState.playerVelocityY * actualDelta;
-
             // Clamp X so fish cannot move past pointer while dragging
             if (this.input.pointerHeld && typeof this.input.pointerX === 'number') {
-                // Only clamp if moving toward pointer and would cross it
                 if ((this.gameState.playerVelocityX > 0 && newX > this.input.pointerX && playerPos.x <= this.input.pointerX) ||
                     (this.gameState.playerVelocityX < 0 && newX < this.input.pointerX && playerPos.x >= this.input.pointerX)) {
                     newX = this.input.pointerX;
                     this.gameState.playerVelocityX = 0;
                 }
             }
-            this.player.setPosition(newX, newY);
-
-            // --- HARD DEADZONE: forcibly zero velocity if no input and velocity is small ---
-            if (!(this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A'] || this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) && Math.abs(this.gameState.playerVelocityX) < 0.2) {
-                this.gameState.playerVelocityX = 0;
-            }
-
-            playerPos = this.player.getPosition();
-
-            this.player.update(this.gameState.playerVelocityX, this.gameState.playerVelocityY);
-            this.player.updateWake(this.gameState.scrollOffset);
+                window.Player.setPosition(this.player, newX, newY);
+                // --- HARD DEADZONE: forcibly zero velocity if no input and velocity is small ---
+                if (!(this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A'] || this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) && Math.abs(this.gameState.playerVelocityX) < 0.2) {
+                    this.gameState.playerVelocityX = 0;
+                }
+                playerPos = window.Player.getPosition(this.player);
+                window.Player.update(this.player, this.gameState.playerVelocityX, this.gameState.playerVelocityY);
+                if (this.player && typeof this.player.updateWake === 'function') this.player.updateWake(this.gameState.scrollOffset);
 
             // Camera is now updated in its own loop (see startCameraLoop)
         }
@@ -1012,10 +909,9 @@ class Game {
             this.fadeOverlay.y = -this.world.y;
         }
 
-
         // Always check river bank collision, even during romantic scene
         if (!this.gameState.won) {
-            this.river.checkBankCollision(this.player, this.gameState.isDashing, this.gameState);
+            River.checkBankCollision(this.river, this.player, this.gameState.isDashing, this.gameState);
         }
 
         // Update distance and trigger romantic sequence if goal reached
@@ -1045,26 +941,20 @@ class Game {
         const waterfallSkip = this.mobileMode ? 4 : 2;
         const islandSkip = this.mobileMode ? 4 : 2;
 
-        // Update river banks (throttled)
+        // Update river system (all logic via River API)
         if (!this.gameState.won && this.frameCounter % bankSkip === 0) {
-            this.river.updateBanks(playerPos);
+            River.updateBanks(this.river, playerPos);
         }
-
-        // Update background layers (always, but could be throttled if needed)
         if (!this.gameState.won) {
-            this.river.updateWaterLayers(playerPos, this.gameState.scrollOffset);
+            River.updateWaterLayers(this.river, playerPos, this.gameState.scrollOffset);
         }
-
-        // Update waterfalls (throttled)
         if (!this.gameState.won && this.frameCounter % waterfallSkip === 0) {
             const viewBuffer = this.config.height;
-            this.river.updateWaterfalls(playerPos, this.config.height, viewBuffer);
+            River.updateWaterfalls(this.river, playerPos, this.config.height, viewBuffer);
         }
-
-        // Update river islands (throttled)
         if (!this.gameState.won && this.frameCounter % islandSkip === 0) {
             const viewBuffer = this.config.height;
-            this.river.updateIslands(playerPos, this.player, this.config.height, viewBuffer, this.gameState);
+            River.updateIslands(this.river, playerPos, this.player, this.config.height, viewBuffer, this.gameState);
         }
 
         // Update obstacles with more aggressive culling on mobile
@@ -1138,11 +1028,8 @@ class Game {
                     obstacle.getContainer() :
                     obstacle;
 
-                // Don't take damage during romantic scene
-                // Skip all player collisions with obstacles during romantic scene
-                // Only skip collision for rocks and waterfalls during romantic scene
-                // Also skip all obstacle collision if fish is invincible (prevents jitter)
-                if (this.player.isInvincible) {
+                // Don't take damage during romantic scene)
+                if (window.Player && window.Player.getPosition && window.Player.setInvincible && this.player.isInvincible) {
                     continue;
                 }
                 // Only skip collision with waterfalls and bears during romantic scene or dashing
@@ -1163,7 +1050,7 @@ class Game {
                         continue;
                     }
                     // Only get hitboxes if needed
-                    const playerBox = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
+                    const playerBox = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const stoneBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                     // STRICT AABB-vs-AABB collision and resolution
                     if (
@@ -1178,27 +1065,27 @@ class Game {
                         const overlapTop = (playerBox.y + playerBox.height) - stoneBox.y;
                         const overlapBottom = (stoneBox.y + stoneBox.height) - playerBox.y;
                         const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-                        let newX = this.player.container.x;
-                        let newY = this.player.container.y;
+                        let newX = window.Player.getContainer(this.player).x;
+                        let newY = window.Player.getContainer(this.player).y;
                         if (minOverlap === overlapLeft) {
                             newX -= overlapLeft;
-                            this.player.velocityX = 0;
+                            // handled by PlayerManager if needed
                         } else if (minOverlap === overlapRight) {
                             newX += overlapRight;
-                            this.player.velocityX = 0;
+                            // handled by PlayerManager if needed
                         } else if (minOverlap === overlapTop) {
                             newY -= overlapTop;
-                            this.player.velocityY = 0;
+                            // handled by PlayerManager if needed
                         } else {
                             newY += overlapBottom;
-                            this.player.velocityY = 0;
+                            // handled by PlayerManager if needed
                         }
                         // Set position exactly flush to the edge
-                        this.player.setPosition(newX, newY);
+                        window.Player.setPosition(this.player, newX, newY);
                         // Only apply damage/invincibility on first contact
                         if (!this.player.isInvincible) {
-                            this.player.isInvincible = true;
-                            this.player.invincibilityEndTime = Date.now() + 350;
+                            window.Player.setInvincible(this.player, true);
+                            window.Player.setInvincibilityEndTime(this.player, Date.now() + 350);
                             this.player.flickerTimer = 0;
                             if (this.player.setTint) {
                                 this.player.setTint(0xff0000);
@@ -1207,7 +1094,7 @@ class Game {
                                 }, 100);
                             }
                             this.gameState.health = Math.max(0, this.gameState.health - (obstacle.damage || 20));
-                            this.river.createSplash(this.player.container.x, this.player.container.y, {});
+                            this.river.createSplash(window.Player.getContainer(this.player).x, window.Player.getContainer(this.player).y, {});
                         }
                         // Skip further processing for this obstacle in the loop
                         continue;
@@ -1219,7 +1106,7 @@ class Game {
                     }
                 } else if (obstacle instanceof Bear || obstacle instanceof Bird) {
                     // DEBUG: Log hitboxes for fish and bird/bear
-                    const playerBoxDbg = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
+                    const playerBoxDbg = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const obsBoxDbg = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                     // Use the same collision logic for bears and birds
                     const playerBox = playerBoxDbg;
@@ -1311,12 +1198,12 @@ class Game {
                             // Do not apply damage or invincibility, just skip
                             continue;
                         }
-                        this.player.takeDamage(obstacle.damage, this.gameState);
+                        window.Player.takeDamage(this.player, obstacle.damage, this.gameState);
                         this.river.createSplash(playerPos.x, playerPos.y, {});
                         // Always flash the fish when hit by a bird
                         if (obstacle instanceof Bird) {
-                            this.player.isInvincible = true;
-                            this.player.invincibilityEndTime = Date.now() + 1000;
+                            window.Player.setInvincible(this.player, true);
+                            window.Player.setInvincibilityEndTime(this.player, Date.now() + 1000);
                             this.player.flickerTimer = 0;
                             if (this.player.setTint) {
                                 this.player.setTint(0xff0000);
@@ -1400,55 +1287,38 @@ class Game {
         this.gameState.won = true;
         this.gameState.score += 1000;
 
-        // Spawn hearts using ParticleManager
         if (this.particleManager) {
             this.particleManager.emitWinHearts(x, y);
         }
 
-        // Fade back in as soon as hearts appear
         if (this.fadeOverlay) {
             const fadeInInterval = setInterval(() => {
                 if (this.fadeOverlay && this.fadeOverlay.alpha > 0) {
                     this.fadeOverlay.alpha -= 0.02;
                 } else if (this.fadeOverlay) {
                     clearInterval(fadeInInterval);
-                    // Remove fade overlay when fully faded in
                     this.world.removeChild(this.fadeOverlay);
                     this.fadeOverlay = null;
-                    // Restore fish z-indexes to normal
                     this.player.getContainer().zIndex = this.originalPlayerZIndex;
                     const goal = this.world.getChildByLabel('goal');
                     if (goal) {
                         goal.zIndex = this.originalGoalZIndex;
                     }
                 }
-            }, 16); // ~60fps
+            }, 16);
         }
 
-        // Show win screen after a delay
         setTimeout(() => {
-            document.getElementById('gameOverTitle').textContent = 'WIN';
-            document.getElementById('gameOverMessage').textContent = 'You made it to the spawning grounds!';
-            document.getElementById('finalDistance').textContent = this.gameState.distance;
-            document.getElementById('gameOverBackdrop').classList.add('win');
-            document.getElementById('gameOverBackdrop').style.display = 'block';
-            document.getElementById('gameOver').style.display = 'block';
+            if (hud) hud.showGameOver(this.gameState.distance, true);
+            overlayManager.showOverlay('win');
         }, 2000);
     }
 
     loseGame() {
         this.gameState.gameOver = true;
-
-        // Play jingle B on lose
         this.audioManager.playJingleB();
-
-
-        document.getElementById('gameOverTitle').textContent = 'LOSE';
-        document.getElementById('gameOverMessage').textContent = 'The journey was too dangerous...';
-        document.getElementById('finalDistance').textContent = this.gameState.distance;
-        document.getElementById('gameOverBackdrop').style.display = 'block';
-        document.getElementById('gameOver').style.display = 'block';
-        // Clear all particles
+        if (hud) hud.showGameOver(this.gameState.distance, false);
+        overlayManager.showOverlay('lose');
         if (this.particleManager) this.particleManager.clear();
     }
 
@@ -1538,10 +1408,8 @@ class Game {
         }
         this.player = null;
 
-        // Destroy and null river
-        if (this.river && typeof this.river.destroy === 'function') {
-            this.river.destroy();
-        }
+        // Destroy and null river (via River API)
+        River.destroy(this.river);
         this.river = null;
 
         // Remove all children from world (if not already destroyed)
@@ -1633,7 +1501,8 @@ class Game {
         await this.createGoal();
 
         // Hide game over screen
-        document.getElementById('gameOver').style.display = 'none';
+        overlayManager.hideOverlay('win');
+        overlayManager.hideOverlay('lose');
 
         // Start ticker and interval only once after reset
         if (this.app && this.app.ticker) {
@@ -1750,106 +1619,58 @@ let preloader = null;
 let preloadedResources = null;
 
 // Initialize everything when the page loads
-window.onload = async () => {
+window.addEventListener('DOMContentLoaded', async () => {
     // Set up HUD
     hud = new HUD();
-
-    // Pause button will be connected after game is created
-
-    // Show loading animation
     hud.simulateLoading();
 
-    // Set up preloader and add all resources
-    preloader = new Preloader();
-    window.preloader = preloader;
-    preloader.add('texture', 'assets/riverbed_B.jpg', 'riverbedTex');
-    preloader.add('texture', 'assets/riverfoliage.png', 'foliageTex');
-    preloader.add('texture', 'assets/bear_walk.png', 'bear_walk');
-    preloader.add('texture', 'assets/bear_eat.png', 'bear_eat');
-    preloader.add('texture', 'assets/stones.png', 'stones');
-    preloader.add('texture', 'assets/bird_glide.png', 'bird_glide');
-    preloader.add('texture', 'assets/bird_flap.png', 'bird_flap');
-    // Preload generated foam and splash as a single spritesheet
-    preloader.add('spritesheet', 'assets/generated/particlesheet.png', 'particlesheet_png');
-    preloader.add('spritesheet', 'assets/generated/particlesheet.json', 'particlesheet_json');
-    // Add water circles spritesheet (only .json, .png is loaded by the spritesheet loader)
-    preloader.add('spritesheet', 'assets/generated/water_circles.json', 'water_circles');
-    preloader.add('spritesheet', 'assets/generated/water_circles.png', 'water_circles_png');
-    preloader.add('json', 'assets/bear_walk_hbox.json', 'bear_walk_hitbox');
-    preloader.add('json', 'assets/bear_eat_hbox.json', 'bear_eat_hitbox');
-    preloader.add('json', 'assets/bird_glide_hbox.json', 'bird_glide_hbox');
-    preloader.add('json', 'assets/bird_flap_hbox.json', 'bird_flap_hbox');
-    preloader.add('json', 'assets/stones_hbox.json', 'stones_hbox');
-    preloader.add('audio', 'assets/audio/splash_A.mp3', 'splash_A');
-    preloader.add('audio', 'assets/audio/splash_B.mp3', 'splash_B');
-    preloader.add('audio', 'assets/audio/splash_C.mp3', 'splash_C');
-    preloader.add('audio', 'assets/audio/splash_D.mp3', 'splash_D');
-    preloader.add('audio', 'assets/audio/splash_E.mp3', 'splash_E');
-    preloader.add('audio', 'assets/audio/splash_F.mp3', 'splash_F');
-
-    preloader.add('audio', 'assets/audio/jingle_A.mp3', 'jingle_A');
-    preloader.add('audio', 'assets/audio/jingle_B.mp3', 'jingle_B');
-    preloader.add('audio', 'assets/audio/jingle_C.mp3', 'jingle_C');
-    preloader.add('audio', 'assets/audio/jingle_D.mp3', 'jingle_D');
-    preloader.add('audio', 'assets/audio/kiss_A.mp3', 'kiss_A');
-
-
-    // Preload all resources
-    preloadedResources = await preloader.preloadAll();
-    window.preloadedResources = preloadedResources;
-    // Ensure particleFrames is present and valid
-    if (!window.preloadedResources.particleFrames || Object.keys(window.preloadedResources.particleFrames).length === 0) {
+    // Set up ResourceLoader and preload all resources
+    const resourceLoader = new window.ResourceLoader();
+    resourceLoader.init();
+    resourceLoader.addCoreResources();
+    preloadedResources = await resourceLoader.preloadAll();
+    // Validate particleFrames
+    if (!preloadedResources.particleFrames || Object.keys(preloadedResources.particleFrames).length === 0) {
         console.error('[Game ERROR] particleFrames missing or empty after preload!');
     } else {
-        // Check validity of each frame
-        const keys = Object.keys(window.preloadedResources.particleFrames);
+        const keys = Object.keys(preloadedResources.particleFrames);
         const invalid = keys.filter(k => {
-            const t = window.preloadedResources.particleFrames[k];
+            const t = preloadedResources.particleFrames[k];
             return !t || !(t.source && t.source.width > 0 && t.source.height > 0);
         });
         if (invalid.length > 0) {
             console.error('[Game ERROR] Some particleFrames are invalid:', invalid);
         }
     }
-    // Parse foam/splash particle spritesheet and assign textures
-    // Particle frames are now parsed and assigned by the preloader.
-    // Water circle frames are now parsed and assigned by the preloader.
 
     // Create game instance (but don't start yet)
     const canvas = document.getElementById('gameCanvas');
     game = new Game(canvas);
-    window.game = game; // Make game accessible to other classes
+    window.game = game;
     if (hud && typeof hud.setPauseCallback === 'function') {
         hud.setPauseCallback(() => game.togglePause());
     }
 
-    // Preload game assets (including Stone assets)
     await game.preloadResources();
 
-    // Connect preloaded audio to AudioManager
     if (game.audioManager) {
-        // Splash sounds (array)
         game.audioManager.sounds.splashSounds = [
             preloadedResources['splash_A'],
             preloadedResources['splash_B'],
             preloadedResources['splash_C']
         ].filter(Boolean);
-        // Lateral splash sounds (array)
         game.audioManager.sounds.lateralSplashSounds = [
             preloadedResources['splash_D'],
             preloadedResources['splash_E'],
             preloadedResources['splash_F']
         ].filter(Boolean);
-        // Jingles and kiss
         game.audioManager.sounds.jingle = preloadedResources['jingle_A'] || null;
         game.audioManager.sounds.jingleB = preloadedResources['jingle_B'] || null;
         game.audioManager.sounds.jingleC = preloadedResources['jingle_C'] || null;
         game.audioManager.sounds.jingleD = preloadedResources['jingle_D'] || null;
         game.audioManager.sounds.kiss = preloadedResources['kiss_A'] || null;
-        // Set volume and preload for each
         Object.values(game.audioManager.sounds).forEach(audio => {
             if (Array.isArray(audio)) {
-               
                 audio.forEach(a => { if (a) { a.volume = game.audioManager.volume; a.preload = 'auto'; } });
             } else if (audio) {
                 audio.volume = game.audioManager.volume;
@@ -1859,28 +1680,24 @@ window.onload = async () => {
         game.audioManager.initialized = true;
     }
 
-    // Start game initialization
     await game.init();
 
-    // Hide loading bar, show start button
     document.querySelector('.progress-container').style.display = 'none';
     const startBtn = document.getElementById('startButton');
     startBtn.style.display = 'block';
-    // Block pointer events from propagating to the game when clicking the start button
+    overlayManager.showOverlay('start');
     startBtn.addEventListener('pointerdown', function(e) {
         e.stopPropagation();
         e.preventDefault();
     });
 
-    // Pause game until player starts
     if (game.app && game.app.ticker) game.app.ticker.stop();
 
-    // Wait for any key to start
     startOnKeyPress = (e) => {
         startGame();
     };
     window.addEventListener('keydown', startOnKeyPress);
-};
+});
 
 // Start the game (called by start button)
 function startGame() {
@@ -1899,6 +1716,7 @@ function startGame() {
     }
     // Hide preloader and begin level
     hud.hidePreloader();
+    overlayManager.hideOverlay('start');
 }
 
 // Restart the game (for restart button)
@@ -1910,8 +1728,8 @@ async function restartGame() {
         }
 
         // Hide game over screen
-        document.getElementById('gameOverBackdrop').style.display = 'none';
-        document.getElementById('gameOver').style.display = 'none';
+        overlayManager.hideOverlay('win');
+        overlayManager.hideOverlay('lose');
         document.getElementById('gameOverBackdrop').classList.remove('win');
 
         // Show restart spinner
@@ -1958,12 +1776,19 @@ async function restartGame() {
                 oldApp.renderer.destroy(true);
             }
             oldApp = null;
+            // Reset renderer singleton so a new app is created
+            if (window.renderer) {
+                window.renderer.app = null;
+            }
         }
 
         // Brief delay for cleanup
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Re-create game instance as on first load
+        if (window.renderer) {
+            window.renderer.app = null;
+        }
         const canvas = document.getElementById('gameCanvas');
         game = new Game(canvas);
         window.game = game;

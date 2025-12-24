@@ -1,4 +1,11 @@
 class Camera {
+        // Clean up camera resources (if needed)
+        destroy() {
+            // If any event listeners or resources need cleanup, do it here
+            // For now, just null out world reference
+            this.world = null;
+            this.config = null;
+        }
     constructor(worldContainer, config) {
         this.world = worldContainer;
         this.config = config;

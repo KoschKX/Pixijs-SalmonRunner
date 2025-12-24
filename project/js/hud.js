@@ -75,6 +75,12 @@ class HUD {
         this.pauseButton.addEventListener('click', () => {
             if (typeof this._pauseCallback === 'function') this._pauseCallback();
         });
+
+        // HUDManager elements
+        this.hudElement = document.getElementById('hud');
+        this.scoreElement = document.getElementById('score');
+        this.winOverlay = document.getElementById('win-overlay');
+        this.loseOverlay = document.getElementById('lose-overlay');
     }
 
     setPauseCallback(cb) {
@@ -89,6 +95,13 @@ class HUD {
             this.pauseButton.style.letterSpacing = '0px';
         }
         if (this.pauseOverlay) this.pauseOverlay.style.display = paused ? 'flex' : 'none';
+
+        // Also call showPause/hidePause for compatibility
+        if (paused) {
+            this.showPause();
+        } else {
+            this.hidePause();
+        }
     }
 
     destroyPauseButton() {
@@ -291,5 +304,37 @@ class HUD {
         this.gameOverElement.style.display = 'none';
         this.gameOverBackdropElement.style.display = 'none';
         this.gameOverBackdropElement.classList.remove('win');
+    }
+
+    setScore(score) {
+        if (this.scoreElement) this.scoreElement.textContent = score;
+    }
+
+    setHealth(health) {
+        if (this.healthElement) this.healthElement.textContent = health;
+    }
+
+    showWin() {
+        if (this.winOverlay) this.winOverlay.style.display = 'block';
+    }
+
+    hideWin() {
+        if (this.winOverlay) this.winOverlay.style.display = 'none';
+    }
+
+    showLose() {
+        if (this.loseOverlay) this.loseOverlay.style.display = 'block';
+    }
+
+    hideLose() {
+        if (this.loseOverlay) this.loseOverlay.style.display = 'none';
+    }
+
+    showPause() {
+        if (this.pauseOverlay) this.pauseOverlay.style.display = 'block';
+    }
+
+    hidePause() {
+        if (this.pauseOverlay) this.pauseOverlay.style.display = 'none';
     }
 }

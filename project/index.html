@@ -26,7 +26,7 @@
             position: relative;
         }
         #gameCanvas {
-            width: 100%;
+            width: 100% !important;
             height: 100%;
             object-fit: cover;
         }
@@ -191,6 +191,7 @@
         <p>Distance: <span id="finalDistance">0</span>m</p>
         <button onclick="restartGame()">Play Again</button>
     </div>
+    <script src="js/utilities.js"></script>
     <script src="js/preloader.js"></script>
     <script src="js/lib/pixi.js"></script>
     <script src="js/audiomanager.js"></script>
@@ -205,11 +206,19 @@
     <script src="js/bird.js"></script>
     <script src="js/net.js"></script>
     <script src="js/river.js"></script>
-        <script src="js/particlemanager.js"></script>
-        <script src="js/spawnmanager.js"></script>
-        <script src="js/romanticsequence.js"></script>
-        <script src="js/input.js"></script>
-        <script src="js/game.js"></script>
+    <script src="js/overlaymanager.js"></script>
+    <script src="js/particlemanager.js"></script>
+    <script src="js/spawnmanager.js"></script>
+    <script src="js/romanticsequence.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/player.js"></script>
+    <!-- Ensure all manager scripts are loaded just before game.js -->
+    <script src="js/renderer.js"></script>
+    <script src="js/gamestate.js"></script>
+    <script src="js/scenemanager.js"></script>
+    <script src="js/inputmanager.js"></script>
+    <script src="js/resourceloader.js"></script>
+    <script src="js/game.js"></script>
 
 </body>
 <script>

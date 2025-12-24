@@ -1,6 +1,19 @@
 class Preloader {
     static cache = {};
 
+    // Sets up all default resources for the game (call this at startup)
+    static setupDefaultResources(preloaderInstance) {
+        if (!preloaderInstance) return;
+        const foamJsonPath = 'assets/generated/foam_splash_particles.json';
+        const foamPngPath = 'assets/generated/foam_splash_particles.png';
+        preloaderInstance.resources = preloaderInstance.resources.filter(r => r.url !== foamJsonPath && r.url !== foamPngPath);
+        preloaderInstance.add('spritesheet', foamJsonPath, 'foam_splash_particles_json');
+        preloaderInstance.add('spritesheet', foamPngPath, 'foam_splash_particles_png');
+        const waterCirclesJsonPath = 'assets/generated/water_circles.json';
+        if (!preloaderInstance.resources.some(r => r.url === waterCirclesJsonPath)) preloaderInstance.add('spritesheet', waterCirclesJsonPath, 'water_circles');
+    }
+    static cache = {};
+
     constructor() {
         this.resources = [];
         this.promises = [];

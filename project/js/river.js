@@ -9,7 +9,6 @@ class River {
         this.riverStreaks = null;
         // Used to clear bounce lockout after a delay
         this.bounceLockoutTimeout = null;
-        
         // Store pre-rendered bank textures for performance
         this.cachedBankTextures = {
             left: [],
@@ -17,7 +16,6 @@ class River {
         };
         this.bankTextureVariations = 8; // More variations for randomness
         this.textureRandomSeeds = []; // Random seeds for each texture variation
-        
         this.init();
     }
     
@@ -110,6 +108,8 @@ class River {
         this.updateDebugBorderCurves();
     }
     
+    // ...existing code...
+
     // Add new river segments as player moves
     extendSegments(playerY) {
         const bankContainer = this.world.getChildByLabel('riverBanks');
@@ -1099,7 +1099,44 @@ class River {
         });
         // Toggle waterfall debug boxes
         this.waterfalls.forEach(waterfall => {
-            waterfall.setDebugMode(enabled);
+			waterfall.setDebugMode(enabled);
         });
     }
+}
+
+// Attach static methods after class definition
+River.create = function(world, config, renderer) {
+    return new River(world, config, renderer);
+};
+River.updateBanks = function(river, playerPos) {
+    river.updateBanks(playerPos);
+};
+River.updateWaterLayers = function(river, playerPos, scrollOffset) {
+    river.updateWaterLayers(playerPos, scrollOffset);
+};
+River.updateWaterfalls = function(river, playerPos, height, viewBuffer) {
+    river.updateWaterfalls(playerPos, height, viewBuffer);
+};
+River.updateIslands = function(river, playerPos, player, height, viewBuffer, gameState) {
+    river.updateIslands(playerPos, player, height, viewBuffer, gameState);
+};
+River.checkBankCollision = function(river, player, isDashing, gameState) {
+    river.checkBankCollision(player, isDashing, gameState);
+};
+River.createRiverIslands = function(river) {
+    return river.createRiverIslands();
+};
+River.getBanks = function(river) {
+    return river.getBanks();
+};
+River.getWakeGraphics = function(river) {
+    return river.getWakeGraphics();
+};
+River.destroy = function(river) {
+    if (river && typeof river.destroy === 'function') river.destroy();
+};
+
+// Make River globally available for legacy and current code
+if (typeof window !== 'undefined') {
+    window.River = River;
 }
