@@ -166,11 +166,6 @@ class Game {
         this.audioManager.kissSound = resources['kiss_A'];
         this.audioManager.jingleSound = resources['jingle_A'];
         
-        console.log('🎵 Audio loaded:');
-        console.log('  Splash sounds:', this.audioManager.splashSounds ? this.audioManager.splashSounds.length : 0);
-        console.log('  Lateral splash sounds:', this.audioManager.lateralSplashSounds ? this.audioManager.lateralSplashSounds.length : 0);
-
-        
         await Bird.initAssets(resources);
         await Fish.initAssets(resources);
         await Bear.initAssets(resources);
