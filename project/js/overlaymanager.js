@@ -1,4 +1,3 @@
-// Ensure OverlayManager exists before adding static utilities
 if (typeof window.OverlayManager === 'undefined') {
     window.OverlayManager = function() {
         this.activeOverlay = null;
@@ -10,7 +9,6 @@ if (typeof window.OverlayManager === 'undefined') {
     };
 }
 
-// Attach static utility methods to OverlayManager
 window.OverlayManager.showGameWin = function(game, hud) {
     setTimeout(() => {
         if (hud) hud.showGameOver(game.gameState.distance, true);
@@ -48,19 +46,13 @@ window.OverlayManager.showStartOverlay = function() {
 window.OverlayManager.hideStartOverlay = function() {
     window.overlayManager.hideOverlay('start');
 };
-// OverlayManager.js
-// Handles showing/hiding overlays and scroll blocking
 
-
-// OverlayManager for classic script usage (not ES module)
 window.OverlayManager = function() {
     this.activeOverlay = null;
-    // Map overlay types to actual element IDs in your HTML
     this.overlayElements = {
         start: document.getElementById('startButton'),
         win: [document.getElementById('gameOverBackdrop'), document.getElementById('gameOver')],
         lose: [document.getElementById('gameOverBackdrop'), document.getElementById('gameOver')],
-        // Add more overlays as needed
     };
 };
 
