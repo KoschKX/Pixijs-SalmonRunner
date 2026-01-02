@@ -107,19 +107,25 @@ class AudioManager {
 
     // Play a random lateral movement splash sound (D, E, or F)
     playRandomLateralSplash() {
-        if (!this.initialized || !this.sounds.lateralSplashSounds || this.sounds.lateralSplashSounds.length === 0) {
+        // Check all possible locations where sounds might be stored
+        const lateralSounds = this.lateralSplashSounds || this.sounds.lateralSplashSounds;
+        
+        if (!lateralSounds || lateralSounds.length === 0) {
             return;
         }
 
-        const randomIndex = Math.floor(Math.random() * this.sounds.lateralSplashSounds.length);
-        const sound = this.sounds.lateralSplashSounds[randomIndex].cloneNode();
-        sound.volume = 0.3; // Lower volume for lateral movement
+        const randomIndex = Math.floor(Math.random() * lateralSounds.length);
+        const sound = lateralSounds[randomIndex];
         
-        sound.play().catch(err => {
-            if (err.name !== 'NotAllowedError') {
-                console.error('Lateral splash failed:', err);
-            }
-        });
+        if (!sound) {
+            return;
+        }
+        
+        // Clone if it's an HTML Audio element, otherwise play directly
+        const audioToPlay = sound.cloneNode ? sound.cloneNode() : sound;
+        audioToPlay.volume = 0.3; // Lower volume for lateral movement
+        
+        audioToPlay.play();
     }
 
     // Play the game start jingle

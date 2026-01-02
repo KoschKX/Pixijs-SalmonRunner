@@ -161,12 +161,14 @@ class Game {
             resources['splash_C'],
             resources['splash_D']
         ].filter(Boolean);
-        this.audioManager.lateralSplashSounds = [
-            resources['lateral_splash_A'],
-            resources['lateral_splash_B']
-        ].filter(Boolean);
+        // Use the same splash sounds for lateral movement
+        this.audioManager.lateralSplashSounds = this.audioManager.splashSounds;
         this.audioManager.kissSound = resources['kiss_A'];
         this.audioManager.jingleSound = resources['jingle_A'];
+        
+        console.log('🎵 Audio loaded:');
+        console.log('  Splash sounds:', this.audioManager.splashSounds ? this.audioManager.splashSounds.length : 0);
+        console.log('  Lateral splash sounds:', this.audioManager.lateralSplashSounds ? this.audioManager.lateralSplashSounds.length : 0);
 
         
         await Bird.initAssets(resources);
@@ -494,6 +496,32 @@ class Game {
     }
 
     gameLoop(delta) {
+        // Handle lateral splash sounds for left/right movement
+        if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
+            if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
+                if (!this.gameState.leftKeyPlayedSound) {
+                    console.log('⬅️ Left key pressed, playing lateral splash');
+                    if (this.audioManager && typeof this.audioManager.playRandomLateralSplash === 'function') {
+                        this.audioManager.playRandomLateralSplash();
+                    }
+                    this.gameState.leftKeyPlayedSound = true;
+                }
+            } else {
+                this.gameState.leftKeyPlayedSound = false;
+            }
+            
+            if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
+                if (!this.gameState.rightKeyPlayedSound) {
+                    console.log('➡️ Right key pressed, playing lateral splash');
+                    if (this.audioManager && typeof this.audioManager.playRandomLateralSplash === 'function') {
+                        this.audioManager.playRandomLateralSplash();
+                    }
+                    this.gameState.rightKeyPlayedSound = true;
+                }
+            } else {
+                this.gameState.rightKeyPlayedSound = false;
+            }
+        }
         
         if (this.input.targetX !== null && this.player) {
             const playerX = this.player.x;
