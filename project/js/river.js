@@ -107,8 +107,6 @@ class River {
         // Draw debug border curves (if enabled)
         this.updateDebugBorderCurves();
     }
-    
-    // ...existing code...
 
     // Add new river segments as player moves
     extendSegments(playerY) {
