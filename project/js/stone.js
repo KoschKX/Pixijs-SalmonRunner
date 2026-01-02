@@ -62,7 +62,7 @@ class Stone extends Sprite {
             rippleTextures = Object.values(rippleTextures);
         }
         if (rippleTextures) {
-            rippleTextures = rippleTextures.filter(t => t && (t.baseTexture || t.source));
+            rippleTextures = rippleTextures.filter(t => t && t.source);
         }
         // Use more waves and pass scale for radius
         this.stoneWaves = window.ParticleManager.createStoneCircleWaves(waveContainer, 6, rippleTextures, scale);

@@ -1,12 +1,12 @@
 class ParticleManager {
     static getMaxParticles() {
-        if (window.game && window.game.mobileMode) return 80;
-        return 180;
+        if (window.game && window.game.mobileMode) return 40; // Reduced from 80
+        return 100; // Reduced from 180
     }
 
     static getMaxFoam() {
-        if (window.game && window.game.mobileMode) return 32;
-        return 64;
+        if (window.game && window.game.mobileMode) return 16; // Reduced from 32
+        return 32; // Reduced from 64
     }
 
     static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
@@ -252,8 +252,7 @@ class ParticleManager {
         this.foam.push(foam);
         if (foam instanceof PIXI.Sprite) {
             if (!foam.texture ||
-                !((foam.texture.source && foam.texture.source.width > 0 && foam.texture.source.height > 0) ||
-                  (foam.texture.baseTexture && foam.texture.baseTexture.width > 0 && foam.texture.baseTexture.height > 0))) {
+                !(foam.texture.source && foam.texture.source.width > 0 && foam.texture.source.height > 0)) {
             }
             this.pixiParticleContainer.addChild(foam);
         } else {
@@ -329,10 +328,7 @@ class ParticleManager {
             let tex = ParticleManager.textures['splash_' + texSize];
             let particle;
             let useFallback = false;
-            const isValid = tex && (
-                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
-            );
+            const isValid = tex && tex.source && tex.source.width > 0 && tex.source.height > 0;
                         if (isValid) {
                                 particle = new PIXI.Sprite(tex);
                                 particle.anchor.set(0.5);
@@ -359,8 +355,7 @@ class ParticleManager {
             this.particles.push(particle);
             if (particle instanceof PIXI.Sprite) {
                 if (!particle.texture ||
-                    !((particle.texture.source && particle.texture.source.width > 0 && particle.texture.source.height > 0) ||
-                      (particle.texture.baseTexture && particle.texture.baseTexture.width > 0 && particle.texture.baseTexture.height > 0))) {
+                    !(particle.texture.source && particle.texture.source.width > 0 && particle.texture.source.height > 0)) {
                 }
                 this.pixiParticleContainer.addChild(particle);
             } else {
@@ -455,10 +450,7 @@ class ParticleManager {
             const availableSizes = [8, 16, 24, 32, 40, 48, 56];
             let closest = availableSizes.reduce((prev, curr) => Math.abs(curr - size) < Math.abs(prev - size) ? curr : prev, availableSizes[0]);
             let tex = ParticleManager.textures['water_circle_' + closest];
-            const isValid = tex && (
-                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
-            );
+            const isValid = tex && tex.source && tex.source.width > 0 && tex.source.height > 0;
             if (isValid) {
                 particle = new PIXI.Sprite(tex);
                 particle.anchor.set(0.5);
@@ -487,7 +479,7 @@ class ParticleManager {
     }
 
     emitWaterfall(x, y, options = {}) {
-        const count = options.count || 32;
+        const count = options.count || (window.game && window.game.mobileMode ? 16 : 24);
         const minSize = options.minSize || 4;
         const maxSize = options.maxSize || 8;
         const minSpeed = options.minSpeed || 6;
@@ -518,10 +510,7 @@ class ParticleManager {
             let tex = ParticleManager.textures['splash_' + texSize] || ParticleManager.textures['foam_' + texSize];
             let particle;
             let useFallback = false;
-            const isValid = tex && (
-                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
-            );
+            const isValid = tex && tex.source && tex.source.width > 0 && tex.source.height > 0;
             if (isValid) {
                 particle = new PIXI.Sprite(tex);
                 particle.anchor.set(0.5);
@@ -609,14 +598,34 @@ class ParticleManager {
             viewX = camera.x - viewWidth / 2;
             viewY = camera.y - viewHeight / 2;
         }
+        
+        // Update particles in batches to reduce load
+        const batchSize = this.mobileMode ? 10 : 20;
+        const startIdx = (Date.now() % this.particles.length);
+        const endIdx = Math.min(startIdx + batchSize, this.particles.length);
+        
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
+            
+            // Only update visible particles or do quick culling
             let inView = true;
             if (camera) {
                 inView = !(p.x < viewX - 64 || p.x > viewX + viewWidth + 64 || p.y < viewY - 64 || p.y > viewY + viewHeight + 64);
                 p.visible = inView;
             }
-            if (!inView) continue;
+            if (!inView) {
+                // Age off-screen particles faster
+                p.life -= dt * 2;
+                if (p.life <= 0) {
+                    if (p instanceof PIXI.Sprite) {
+                        this.pixiParticleContainer.removeChild(p);
+                    } else {
+                        this.world.removeChild(p);
+                    }
+                    this.particles.splice(i, 1);
+                }
+                continue;
+            }
             p.x += p.vx * dt;
             p.y += p.vy * dt;
             p.vx *= Math.pow(0.92, ParticleManager.DT);

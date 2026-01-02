@@ -28,7 +28,7 @@ class Preloader {
         this.resources = this.resources.filter(r => r.url !== foamJsonPath && r.url !== foamPngPath);
         this.resources.unshift({ type: 'spritesheet', url: foamJsonPath, name: 'foam_splash_particles_json' });
         this.resources.unshift({ type: 'spritesheet', url: foamPngPath, name: 'foam_splash_particles_png' });
-        
+
         const loaded = {};
         let foamSplashJson = null;
         let foamSplashPng = null;
@@ -126,8 +126,8 @@ class Preloader {
                                 tex.defaultHeight = 20;
                             }
                             loaded.particleFrames[key] = tex;
-                            let w = tex.source?.width || tex.baseTexture?.width;
-                            let h = tex.source?.height || tex.baseTexture?.height;
+                            let w = tex.source?.width;
+                            let h = tex.source?.height;
                         } catch (err) {
                             console.error(`[Preloader] Exception creating texture '${key}':`, err, tex);
                         }
@@ -165,8 +165,8 @@ class Preloader {
                                 frame: new PIXI.Rectangle(f.x, f.y, f.w, f.h)
                             });
                             loaded.waterCircleFrames[key] = tex;
-                            let w = tex.source?.width || tex.baseTexture?.width;
-                            let h = tex.source?.height || tex.baseTexture?.height;
+                            let w = tex.source?.width;
+                            let h = tex.source?.height;
                         } catch (err) {
                             console.error(`[Preloader] Error creating water circle texture '${key}':`, err, tex);
                         }

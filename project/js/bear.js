@@ -69,6 +69,11 @@ class Bear extends Sprite {
     }
     
     update(riverBanks, config, inView = true, playerPos = null) { 
+        // Skip expensive updates for off-screen bears
+        if (!inView && !this.alwaysChase) {
+            return;
+        }
+        
         super.update(inView);
         // Bear doesn't move during the romantic scene
         if (riverBanks && riverBanks.romanticSceneActive) { // backwards compat, but fix below

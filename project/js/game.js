@@ -611,10 +611,13 @@ class Game {
         const now = performance.now();
         if (!this.lastFrameTime) this.lastFrameTime = now;
         const elapsed = now - this.lastFrameTime;
-        if (elapsed < this.frameInterval) {
+        
+        // Adaptive frame rate throttling based on performance
+        const minFrameTime = this.mobileMode ? 20 : 16.67; // 50fps mobile, 60fps desktop
+        if (elapsed < minFrameTime) {
             return;
         }
-        this.lastFrameTime = now;
+        this.lastFrameTime = now - (elapsed % minFrameTime); // Carry over remainder
 
         const actualDelta = delta.deltaTime;
 
@@ -905,14 +908,14 @@ class Game {
             }
         }
 
-        const bankSkip = this.mobileMode ? 6 : 3;
-        const waterfallSkip = this.mobileMode ? 4 : 2;
-        const islandSkip = this.mobileMode ? 4 : 2;
+        const bankSkip = this.mobileMode ? 8 : 4;
+        const waterfallSkip = this.mobileMode ? 6 : 3;
+        const islandSkip = this.mobileMode ? 5 : 3;
 
         if (!this.gameState.won && this.frameCounter % bankSkip === 0) {
             River.updateBanks(this.river, playerPos);
         }
-        if (!this.gameState.won) {
+        if (!this.gameState.won && this.frameCounter % 2 === 0) {
             River.updateWaterLayers(this.river, playerPos, this.gameState.scrollOffset);
         }
         if (!this.gameState.won && this.frameCounter % waterfallSkip === 0) {
@@ -929,25 +932,38 @@ class Game {
             const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2 * cullMultiplier;
             const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
 
+            // Process obstacles in batches to reduce per-frame load
+            const obstaclesPerFrame = this.mobileMode ? 8 : 15;
+            const startIdx = (this.frameCounter * obstaclesPerFrame) % this.obstacles.length;
+            const endIdx = Math.min(startIdx + obstaclesPerFrame, this.obstacles.length);
+
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obstacle = this.obstacles[i];
+                
+                // Quick position check - cache position lookup
                 let obstaclePos;
-                if (
-                    (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net) && typeof obstacle.getPosition === 'function'
-                ) {
-                    obstaclePos = obstacle.getPosition();
-                } else if (obstacle instanceof Stone && typeof obstacle.getPosition === 'function') {
-                    obstaclePos = obstacle.getPosition();
-                } else if (obstacle.getContainer && obstacle.getContainer().x !== undefined && obstacle.getContainer().y !== undefined) {
-                    obstaclePos = {
-                        x: obstacle.getContainer().x,
-                        y: obstacle.getContainer().y
-                    };
+                if (obstacle._cachedPos && this.frameCounter - obstacle._lastPosFrame < 3) {
+                    obstaclePos = obstacle._cachedPos;
                 } else {
-                    obstaclePos = {
-                        x: obstacle.x,
-                        y: obstacle.y
-                    };
+                    if (
+                        (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net) && typeof obstacle.getPosition === 'function'
+                    ) {
+                        obstaclePos = obstacle.getPosition();
+                    } else if (obstacle instanceof Stone && typeof obstacle.getPosition === 'function') {
+                        obstaclePos = obstacle.getPosition();
+                    } else if (obstacle.getContainer && obstacle.getContainer().x !== undefined && obstacle.getContainer().y !== undefined) {
+                        obstaclePos = {
+                            x: obstacle.getContainer().x,
+                            y: obstacle.getContainer().y
+                        };
+                    } else {
+                        obstaclePos = {
+                            x: obstacle.x,
+                            y: obstacle.y
+                        };
+                    }
+                    obstacle._cachedPos = obstaclePos;
+                    obstacle._lastPosFrame = this.frameCounter;
                 }
 
                 // Aggressive culling: skip update for obstacles far off screen
@@ -993,6 +1009,15 @@ class Game {
                     obstacle;
 
                 if (window.Player && window.Player.getPosition && window.Player.setInvincible && this.player.isInvincible) {
+                    continue;
+                }
+                
+                // Quick distance check before expensive collision detection
+                const dx = obstaclePos.x - playerPos.x;
+                const dy = obstaclePos.y - playerPos.y;
+                const distSq = dx * dx + dy * dy;
+                const maxCollisionDist = 200; // Maximum distance for collision (squared later)
+                if (distSq > maxCollisionDist * maxCollisionDist) {
                     continue;
                 }
                 if ((this.gameState.romanticSceneActive)
@@ -1532,8 +1557,7 @@ class Game {
         if (this.app) {
             this.app.destroy(true, {
                 children: true,
-                texture: true,
-                baseTexture: true
+                texture: true
             });
             this.app = null;
         }

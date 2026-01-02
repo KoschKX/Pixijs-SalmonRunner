@@ -81,6 +81,11 @@ class Bird extends Sprite {
     }
 
     update(screenWidth, inView = true) {
+        // Skip updates for off-screen birds
+        if (!inView) {
+            return;
+        }
+        
         super.update(inView);
         // Move bird and handle screen edge collisions
         this.y += this.velocityY;

@@ -216,8 +216,7 @@ class Waterfall {
                         const key = 'foam_' + idx;
                         const tex = window.ParticleManager.textures[key];
                         if (tex){
-                            const valid = (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                                          (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0);
+                            const valid = tex.source && tex.source.width > 0 && tex.source.height > 0;
                         }
                     });
                 }
@@ -236,10 +235,7 @@ class Waterfall {
                 : null;
             let particle;
             // For PixiJS v8+: check if the texture is valid
-            const isValid = tex && (
-                (tex.source && tex.source.width > 0 && tex.source.height > 0) ||
-                (tex.baseTexture && tex.baseTexture.width > 0 && tex.baseTexture.height > 0)
-            );
+            const isValid = tex && tex.source && tex.source.width > 0 && tex.source.height > 0;
             if (isValid) {
                 particle = new PIXI.Sprite(tex);
                 if (particle.anchor && typeof particle.anchor.set === 'function') {
@@ -286,7 +282,7 @@ class Waterfall {
             rippleTextures = Object.values(rippleTextures);
         }
         if (rippleTextures) {
-            rippleTextures = rippleTextures.filter(t => t && (t.baseTexture || t.source));
+            rippleTextures = rippleTextures.filter(t => t && t.source);
         }
         const waveResults = window.ParticleManager.createWaterfallWaves(this.waveWakes, rippleTextures, this.riverWidth);
         this.waveWakes.y = height;
