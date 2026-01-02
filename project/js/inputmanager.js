@@ -42,6 +42,20 @@ window.InputManager.prototype.setup = function() {
     
     // Create handler functions
     const keydownHandler = function(e) {
+        // Check if game over screen is showing and trigger restart
+        if (window.overlayManager && (window.overlayManager.activeOverlay === 'win' || window.overlayManager.activeOverlay === 'lose')) {
+            console.log('[InputManager] Game over screen detected, key pressed:', e.key);
+            if (e.key !== 'Tab') {
+                console.log('[InputManager] Calling restartGame');
+                if (typeof window.restartGame === 'function') {
+                    window.restartGame();
+                } else {
+                    console.error('[InputManager] restartGame is not a function');
+                }
+                return;
+            }
+        }
+        
         self.keys[e.key] = true;
 
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {

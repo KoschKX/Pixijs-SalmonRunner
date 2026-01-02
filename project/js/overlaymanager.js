@@ -13,6 +13,18 @@ window.OverlayManager.showGameWin = function(game, hud) {
     setTimeout(() => {
         if (hud) hud.showGameOver(game.gameState.distance, true);
         window.overlayManager.showOverlay('win');
+        
+        // Add keyboard listener for restart
+        if (!window.restartOnKeyPress) {
+            window.restartOnKeyPress = (e) => {
+                if (e.key !== 'Tab') {
+                    console.log('[OverlayManager] Key pressed on win screen:', e.key);
+                    window.restartGame();
+                }
+            };
+            window.addEventListener('keydown', window.restartOnKeyPress);
+            console.log('[OverlayManager] Added keydown listener for win screen');
+        }
     }, 2000);
 };
 
@@ -22,9 +34,28 @@ window.OverlayManager.showGameLose = function(game, hud) {
     if (hud) hud.showGameOver(game.gameState.distance, false);
     window.overlayManager.showOverlay('lose');
     if (game.particleManager) game.particleManager.clear();
+    
+    // Add keyboard listener for restart
+    if (!window.restartOnKeyPress) {
+        window.restartOnKeyPress = (e) => {
+            if (e.key !== 'Tab') {
+                console.log('[OverlayManager] Key pressed on lose screen:', e.key);
+                window.restartGame();
+            }
+        };
+        window.addEventListener('keydown', window.restartOnKeyPress);
+        console.log('[OverlayManager] Added keydown listener for lose screen');
+    }
 };
 
 window.OverlayManager.hideGameOver = function() {
+    // Remove keyboard listener
+    if (window.restartOnKeyPress) {
+        window.removeEventListener('keydown', window.restartOnKeyPress);
+        window.restartOnKeyPress = null;
+        console.log('[OverlayManager] Removed keydown listener');
+    }
+    
     window.overlayManager.hideOverlay('win');
     window.overlayManager.hideOverlay('lose');
     const backdrop = document.getElementById('gameOverBackdrop');

@@ -14,7 +14,6 @@ class Bird extends Sprite {
 
     constructor(screenHeight = 600) {
         super();
-        // Randomly pick bird size: small, medium, or large
         const sizeRoll = Math.random();
         if (sizeRoll < 0.33) {
             this.size = 'small';
@@ -37,15 +36,13 @@ class Bird extends Sprite {
         }
         this.type = 'bird';
         this.velocityY = 0;
-        // Random horizontal speed
-        this.velocityX = (Math.random() - 0.5) * 3 * this.speedMultiplier;
+        this.velocityX = (Math.random() - 0.5) * 3 * this.speedMultiplier * (0.7 + Math.random() * 0.6);
         this.currentAnimation = 'flap';
         this.animationTimer = 0;
         this.flapDuration = 60;
         this.glideDuration = 90;
         this.meshScale = this.baseScale;
         this.createGraphics();
-        // Start at random X, above the screen
         this.x = Math.random() * 800;
         this.y = -Math.random() * screenHeight;
         this.visible = true;

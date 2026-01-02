@@ -1232,6 +1232,26 @@ class Game {
         setTimeout(() => {
             if (hud) hud.showGameOver(this.gameState.distance, true);
             overlayManager.showOverlay('win');
+            
+            // Destroy all birds and bears
+            for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                const obs = this.obstacles[i];
+                if (obs.type === 'bird' || obs.type === 'bear') {
+                    obs.destroy();
+                    this.obstacles.splice(i, 1);
+                }
+            }
+            
+            // Add keyboard listener for restart
+            if (!window.restartOnKeyPress) {
+                window.restartOnKeyPress = (e) => {
+                    if (e.key !== 'Tab') {
+                        console.log('[Game] Key pressed on win screen:', e.key);
+                        window.restartGame();
+                    }
+                };
+                window.addEventListener('keydown', window.restartOnKeyPress);
+            }
         }, 2000);
     }
 
@@ -1241,6 +1261,25 @@ class Game {
         if (hud) hud.showGameOver(this.gameState.distance, false);
         overlayManager.showOverlay('lose');
         if (this.particleManager) this.particleManager.clear();
+        
+        // Destroy all birds and bears
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            if (obs.type === 'bird' || obs.type === 'bear') {
+                obs.destroy();
+                this.obstacles.splice(i, 1);
+            }
+        }
+        
+        // Add keyboard listener for restart
+        if (!window.restartOnKeyPress) {
+            window.restartOnKeyPress = (e) => {
+                if (e.key !== 'Tab') {
+                    window.restartGame();
+                }
+            };
+            window.addEventListener('keydown', window.restartOnKeyPress);
+        }
     }
 
     async restart() {
@@ -1611,7 +1650,13 @@ function startGame() {
 }
 
 // Restart the game (for restart button)
-async function restartGame() {
+window.restartGame = async function() {
+    // Remove keyboard listener immediately
+    if (window.restartOnKeyPress) {
+        window.removeEventListener('keydown', window.restartOnKeyPress);
+        window.restartOnKeyPress = null;
+    }
+    
     if (game && hud) {
         // Stop all sounds
         if (game.audioManager && typeof game.audioManager.stopAll === 'function') {
@@ -1637,11 +1682,17 @@ async function restartGame() {
         window.game = null;
         window.hud = null;
 
-        // Remove all event listeners
+        // Remove all event listeners (except restartOnKeyPress)
         window.removeEventListener('keydown', startOnKeyPress);
-        window.removeEventListener('keydown', game && game.handleKeyDown);
-        window.removeEventListener('keyup', game && game.handleKeyUp);
-        window.removeEventListener('resize', game && game.handleResize);
+        if (game && game.handleKeyDown) {
+            window.removeEventListener('keydown', game.handleKeyDown);
+        }
+        if (game && game.handleKeyUp) {
+            window.removeEventListener('keyup', game.handleKeyUp);
+        }
+        if (game && game.handleResize) {
+            window.removeEventListener('resize', game.handleResize);
+        }
 
         // Brief delay for spinner
         await new Promise(resolve => setTimeout(resolve, 100));
