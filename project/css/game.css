@@ -13,6 +13,7 @@ body {
 
     background-image: url(../assets/under_water.jpg) !important;
     background-size: cover !important;
+    background-position: center !important;
 }
 #gameContainer {
 display: flex;
