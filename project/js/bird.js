@@ -73,7 +73,9 @@ class Bird extends Sprite {
         if (this.currentAnimation === name) return;
         this.currentAnimation = name;
         this.sprite.textures = this.animations[name];
-        if (speed !== null) this.sprite.animationSpeed = speed;
+        if (speed !== null && this.sprite.animationSpeed !== speed) {
+            this.sprite.animationSpeed = speed;
+        }
         this.sprite.gotoAndPlay(0);
         if (this.debugMode) {
             this.updateDebugGraphics();

@@ -75,23 +75,20 @@ class Bear extends Sprite {
         }
         
         super.update(inView);
-        // Bear doesn't move during the romantic scene
-        if (riverBanks && riverBanks.romanticSceneActive) { // backwards compat, but fix below
-            this.isWalking = false;
-            this.switchAnimation('eat');
+        
+        const romanticActive = (riverBanks && riverBanks.romanticSceneActive) ||
+                               (config && config.romanticSceneActive) ||
+                               (arguments.length > 1 && arguments[1] && arguments[1].romanticSceneActive);
+        
+        if (romanticActive) {
+            if (this.isWalking || !this._romanticModeSet) {
+                this.isWalking = false;
+                this.switchAnimation('eat');
+                this._romanticModeSet = true;
+            }
             return;
         }
-        if (config && config.romanticSceneActive) { // old call, but fix below
-            this.isWalking = false;
-            this.switchAnimation('eat');
-            return;
-        }
-        // Correct: check gameState.romanticSceneActive
-        if (arguments.length > 1 && arguments[1] && arguments[1].romanticSceneActive) {
-            this.isWalking = false;
-            this.switchAnimation('eat');
-            return;
-        }
+        this._romanticModeSet = false;
 
         // Figure out which side of the river the bear should be on
         if (this.bankX === 0 && window.game && window.game.river) {

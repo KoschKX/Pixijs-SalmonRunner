@@ -122,6 +122,9 @@ class Fish extends Sprite {
         this.velocityX = velocityX;
         this.velocityY = velocityY;
         
+        // Skip some updates if off-screen
+        if (!inView && Math.random() > 0.5) return;
+        
         // Update animation frame
         if (this.animationFrames.length > 0) {
             this.animationTimer += this.animationSpeed;
@@ -156,7 +159,9 @@ class Fish extends Sprite {
             this.alpha = 1; // Ensure fully visible if not invincible
         }
         
-        // Swimming motion and mesh bending
+        // Skip mesh deformation when off-screen
+        if (!inView) return;
+        
         this.swimTime += 0.15;
         const speed = Math.sqrt(this.velocityX ** 2 + this.velocityY ** 2);
         const swimSpeed = Math.max(0.5, speed / 3);

@@ -79,9 +79,10 @@ class Waterfall {
         displacementSprite.scale.set(width / dispWidth, height / dispHeight);
         displacementSprite.visible = false;
         
+        const filterScale = (window.game && window.game.mobileMode) ? 10 : 15;
         const displacementFilter = new PIXI.DisplacementFilter({
             sprite: displacementSprite,
-            scale: 25
+            scale: filterScale
         });
         
         textureSprite.filters = [displacementFilter];
@@ -224,10 +225,11 @@ class Waterfall {
         this.waveWakes = new PIXI.Container();
         this.foam = new PIXI.Container();
         
-        // Add splash particles at the bottom, using foam textures if available
+        // Splash particles at the bottom
         const foamIndices = [0, 1, 2, 3, 4, 6, 8];
         const splashParticles = [];
-        for (let i = 0; i < 100; i++) {
+        const particleCount = (window.game && window.game.mobileMode) ? 30 : 60;
+        for (let i = 0; i < particleCount; i++) {
             // Choose a random foam texture
             const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
             let tex = (window.ParticleManager && window.ParticleManager.textures)
@@ -539,11 +541,12 @@ class Waterfall {
                 }
             });
         }
-        // Animate the white foam mist at the bottom
+        // Animate foam mist
         if (this.container.foamMist) {
             this.container.mistTime += 0.1 * dt;
             this.container.foamMist.clear();
-            for (let i = 0; i < 15; i++) {
+            const mistParticles = (window.game && window.game.mobileMode) ? 6 : 10;
+            for (let i = 0; i < mistParticles; i++) {
                 const x = this.riverLeft + Math.random() * this.riverWidth;
                 const y = Math.random() * 20 - 10;
                 const size = 3 + Math.random() * 8;

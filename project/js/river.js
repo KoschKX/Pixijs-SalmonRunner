@@ -216,16 +216,16 @@ class River {
         // Add riverbed texture background (tiled)
         const riverbedTexture = PIXI.Texture.from('assets/riverbed_B.jpg');
         
-        // Make a large tiling sprite to cover the whole level
+        // Big tiling sprite to cover the whole level
         const tilingSprite = new PIXI.TilingSprite({
             texture: riverbedTexture,
             width: this.config.width * 2.5, // Extra wide to cover curved banks
-            height: 100000 // Large enough to cover entire level plus margins
+            height: 30000 // Reduced from 100000 for better performance
         });
         
         tilingSprite.tileScale.set(256 / riverbedTexture.source.width, 256 / riverbedTexture.source.height);
-        tilingSprite.x = -this.config.width * 0.75; // Center the wider sprite
-        tilingSprite.y = -50000; // Start well above goal at -10000
+        tilingSprite.x = -this.config.width * 0.75;
+        tilingSprite.y = -15000;
         
         waterLayer1.addChild(tilingSprite);
         
@@ -255,7 +255,9 @@ class River {
         displacementSprite.scale.set(1);
         waterLayer1.addChild(displacementSprite);
         
-        const displacementFilter = new PIXI.DisplacementFilter({ sprite: displacementSprite, scale: 25 });
+        // Lower scale on mobile to improve performance
+        const filterScale = (window.game && window.game.mobileMode) ? 10 : 15;
+        const displacementFilter = new PIXI.DisplacementFilter({ sprite: displacementSprite, scale: filterScale });
         
         tilingSprite.filters = [displacementFilter];
         tilingSprite.displacementSprite = displacementSprite;
@@ -267,9 +269,8 @@ class River {
         
         // Placeholder for river streaks (set up after path cache)
         
-        // Add blue water overlay (matches tiling sprite size)
         const blueWaterOverlay = new PIXI.Graphics();
-        blueWaterOverlay.rect(-this.config.width * 0.75, -50000, this.config.width * 2.5, 100000);
+        blueWaterOverlay.rect(-this.config.width * 0.75, -15000, this.config.width * 2.5, 30000);
         blueWaterOverlay.fill({ color: 0x0066cc, alpha: 0.4 });
         
         waterOverlay.addChild(blueWaterOverlay);

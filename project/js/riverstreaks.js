@@ -64,9 +64,9 @@ class RiverStreaks {
                 return;
             }
             
-            // Draw a curved streak using the cached river path
+            // Draw curved streak
             streak.clear();
-            const points = 10; // Fewer points for smoother, less angular curves
+            const points = 6;
             const streakLength = 150; // Length of each streak segment
             
             // Begin drawing the streak

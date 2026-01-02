@@ -8,6 +8,30 @@ class ParticleManager {
         if (window.game && window.game.mobileMode) return 10; // Reduced from 16
         return 32;
     }
+    
+    // Reuse foam particles instead of creating new ones
+    static _foamPool = [];
+    static _poolSize = 50;
+    
+    static getPooledFoam(texture) {
+        if (this._foamPool.length > 0) {
+            const foam = this._foamPool.pop();
+            if (texture) foam.texture = texture;
+            foam.alpha = 1;
+            foam.visible = true;
+            return foam;
+        }
+        const foam = new PIXI.Sprite(texture);
+        foam.anchor.set(0.5);
+        return foam;
+    }
+    
+    static returnFoamToPool(foam) {
+        if (this._foamPool.length < this._poolSize) {
+            foam.visible = false;
+            this._foamPool.push(foam);
+        }
+    }
 
     static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
         const circularWaves = [];
@@ -177,8 +201,7 @@ class ParticleManager {
                     tex = ParticleManager.textures['foam_' + foamIdx];
                 }
                 if (tex) {
-                    foam = new PIXI.Sprite(tex);
-                    foam.anchor.set(0.5);
+                    foam = ParticleManager.getPooledFoam(tex);
                 } else {
                     foam = new PIXI.Graphics();
                     foam.ellipse(0, 0, 5, 8);
@@ -265,6 +288,7 @@ class ParticleManager {
         if (idx !== -1) this.foam.splice(idx, 1);
         if (foam instanceof PIXI.Sprite) {
             this.pixiParticleContainer.removeChild(foam);
+            ParticleManager.returnFoamToPool(foam);
         } else {
             this.world.removeChild(foam);
         }

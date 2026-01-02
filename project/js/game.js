@@ -932,15 +932,23 @@ class Game {
             const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2 * cullMultiplier;
             const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
 
-            // Process obstacles in batches to reduce per-frame load
-            const obstaclesPerFrame = this.mobileMode ? 5 : 15;
-            const startIdx = (this.frameCounter * obstaclesPerFrame) % this.obstacles.length;
-            const endIdx = Math.min(startIdx + obstaclesPerFrame, this.obstacles.length);
+            const obstaclesPerFrame = this.mobileMode ? 10 : 20;
+            const totalObstacles = this.obstacles.length;
+            
+            // Sort by distance to player every 30 frames
+            if (!this._obstaclesSorted || this.frameCounter % 30 === 0) {
+                this.obstacles.sort((a, b) => {
+                    const aPos = a._cachedPos || { y: 0 };
+                    const bPos = b._cachedPos || { y: 0 };
+                    return Math.abs(aPos.y - playerPos.y) - Math.abs(bPos.y - playerPos.y);
+                });
+                this._obstaclesSorted = true;
+            }
 
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obstacle = this.obstacles[i];
                 
-                // Quick position check - cache position lookup
+                // Cache position lookups
                 let obstaclePos;
                 if (obstacle._cachedPos && this.frameCounter - obstacle._lastPosFrame < 3) {
                     obstaclePos = obstacle._cachedPos;
@@ -966,7 +974,7 @@ class Game {
                     obstacle._lastPosFrame = this.frameCounter;
                 }
 
-                // Aggressive culling: skip update for obstacles far off screen
+                // Don't update stuff that's way off screen
                 const inView = obstaclePos.y >= viewTop && obstaclePos.y <= viewBottom;
                 let obstacleContainerForVisibility = (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net || obstacle instanceof Stone) ?
                     obstacle.getContainer() :
@@ -991,7 +999,8 @@ class Game {
                     obstacle.update(this.config.width, inView);
                 } else if (obstacle instanceof Stone) {
                     if (typeof obstacle.update === 'function') obstacle.update();
-                    if (this.particleManager) {
+                    // Only spawn foam every 3rd frame
+                    if (this.particleManager && this.frameCounter % 3 === 0) {
                         this.particleManager.emitFoamAtStone(obstacle);
                     }
                 } else {
@@ -1012,12 +1021,12 @@ class Game {
                     continue;
                 }
                 
-                // Quick distance check before expensive collision detection
+                // Check distance before doing full collision (skip sqrt)
                 const dx = obstaclePos.x - playerPos.x;
                 const dy = obstaclePos.y - playerPos.y;
                 const distSq = dx * dx + dy * dy;
-                const maxCollisionDist = 200; // Maximum distance for collision (squared later)
-                if (distSq > maxCollisionDist * maxCollisionDist) {
+                const maxCollisionDistSq = 40000; // 200^2
+                if (distSq > maxCollisionDistSq) {
                     continue;
                 }
                 if ((this.gameState.romanticSceneActive)

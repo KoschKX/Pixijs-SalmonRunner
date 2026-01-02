@@ -90,46 +90,55 @@ class HUD {
     }
     
     update(health, distance) {
-        // 1 heart = 10 health
-        const hearts = Math.ceil(health / 10);
-        const maxHearts = 10;
-        let heartDisplay = '';
-        
-        for (let i = 0; i < maxHearts; i++) {
-            if (i < hearts) {
-                heartDisplay += '<span style="color: #ff4466;">♥</span> ';
-            } else {
-                heartDisplay += '<span style="color: rgba(255, 68, 102, 0.25);">♥</span> ';
+        // Only update hearts if health changed
+        if (this._lastHealth !== health) {
+            this._lastHealth = health;
+            // 1 heart = 10 health
+            const hearts = Math.ceil(health / 10);
+            const maxHearts = 10;
+            let heartDisplay = '';
+            
+            for (let i = 0; i < maxHearts; i++) {
+                if (i < hearts) {
+                    heartDisplay += '<span style="color: #ff4466;">♥</span> ';
+                } else {
+                    heartDisplay += '<span style="color: rgba(255, 68, 102, 0.25);">♥</span> ';
+                }
             }
+            
+            this.healthElement.innerHTML = heartDisplay.trim();
+            this.healthElement.style.fontSize = '2em';
         }
         
-        this.healthElement.innerHTML = heartDisplay.trim();
-        this.healthElement.style.fontSize = '2em';
         
-        let displayDistance = distance;
-        if (window.game && window.game.config && typeof window.game.config.goalDistance === 'number') {
-            if ((window.game.gameState && window.game.gameState.romanticSceneActive) || (window.game.gameState && window.game.gameState.won)) {
-                displayDistance = window.game.config.goalDistance;
-            } else {
-                const player = window.game.player;
-                const goalY = -(window.game.config.goalDistance * 10);
-                let playerY = null;
-                if (player) {
-                    if (typeof player.getPosition === 'function') {
-                        playerY = player.getPosition().y;
-                    } else if (typeof player.y === 'number') {
-                        playerY = player.y;
+        // Skip distance update if it hasn't changed
+        if (this._lastDistance !== distance) {
+            this._lastDistance = distance;
+            let displayDistance = distance;
+            if (window.game && window.game.config && typeof window.game.config.goalDistance === 'number') {
+                if ((window.game.gameState && window.game.gameState.romanticSceneActive) || (window.game.gameState && window.game.gameState.won)) {
+                    displayDistance = window.game.config.goalDistance;
+                } else {
+                    const player = window.game.player;
+                    const goalY = -(window.game.config.goalDistance * 10);
+                    let playerY = null;
+                    if (player) {
+                        if (typeof player.getPosition === 'function') {
+                            playerY = player.getPosition().y;
+                        } else if (typeof player.y === 'number') {
+                            playerY = player.y;
+                        }
+                    }
+                    if (
+                        (playerY !== null && Math.abs(playerY - goalY) < 30) ||
+                        (Math.abs(distance - window.game.config.goalDistance) <= 1)
+                    ) {
+                        displayDistance = window.game.config.goalDistance;
                     }
                 }
-                if (
-                    (playerY !== null && Math.abs(playerY - goalY) < 30) ||
-                    (Math.abs(distance - window.game.config.goalDistance) <= 1)
-                ) {
-                    displayDistance = window.game.config.goalDistance;
-                }
             }
+            this.distanceElement.textContent = displayDistance;
         }
-        this.distanceElement.textContent = displayDistance;
     }
     
     showPreloader() {
