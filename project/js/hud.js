@@ -267,6 +267,10 @@ class HUD {
             this.gameOverTitleElement.textContent = 'WIN';
             this.gameOverMessageElement.textContent = 'You made it to the spawning grounds!';
             this.gameOverBackdropElement.classList.add('win');
+            // Show full goal distance on win
+            if (window.game && window.game.config && window.game.config.goalDistance) {
+                score = window.game.config.goalDistance;
+            }
         } else {
             this.gameOverTitleElement.textContent = 'LOSE';
             this.gameOverMessageElement.textContent = 'The journey was too dangerous...';
