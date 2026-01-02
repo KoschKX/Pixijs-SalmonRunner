@@ -7,38 +7,30 @@ class River {
         this.waterfalls = [];
         this.riverIslands = [];
         this.riverStreaks = null;
-        // Used to clear bounce lockout after a delay
         this.bounceLockoutTimeout = null;
-        // Store pre-rendered bank textures for performance
         this.cachedBankTextures = {
             left: [],
             right: []
         };
-        this.bankTextureVariations = 8; // More variations for randomness
-        this.textureRandomSeeds = []; // Random seeds for each texture variation
+        this.bankTextureVariations = 8;
+        this.textureRandomSeeds = [];
         this.init();
     }
     
     init() {
-        // Add water background layers
         this.createWaterBackground();
-        
-        // Pre-generate bank textures to avoid lag during play
         this.pregenerateBankTextures();
-        
-        // Add waterfalls (behind banks)
         this.createWaterfalls();
         
         const bankContainer = new PIXI.Container();
         bankContainer.label = 'riverBanks';
-        bankContainer.zIndex = 10; // Riverbanks above water, below player
+        bankContainer.zIndex = 10;
         this.world.addChild(bankContainer);
         
-        // Add debug border container (drawn on top)
         const debugBorderContainer = new PIXI.Container();
         debugBorderContainer.label = 'debugBorders';
-        debugBorderContainer.zIndex = 100; // Topmost
-        debugBorderContainer.visible = false; // Hidden by default
+        debugBorderContainer.zIndex = 100;
+        debugBorderContainer.visible = false;
         this.world.addChild(debugBorderContainer);
         this.world.sortableChildren = true;
         
@@ -51,38 +43,31 @@ class River {
         rightBorderLine.label = 'rightBorderCurve';
         debugBorderContainer.addChild(rightBorderLine);
         
-        // Generate river bank segments with coordinated curves
-        // Pre-generate many segments to avoid runtime stutters
         for (let i = -200; i < 200; i++) {
-            // Use multiple sine waves for organic curves
             const curve1 = Math.sin(i * this.config.bankCurveSpeed) * 80;
             const curve2 = Math.sin(i * this.config.bankCurveSpeed * 2.3) * 30;
             const curve3 = Math.sin(i * this.config.bankCurveSpeed * 0.5) * 50;
-            // Add high-frequency bumps for natural look
             const bump1 = Math.sin(i * 1.7) * 15;
             const bump2 = Math.cos(i * 3.2) * 10;
-            const bump3 = Math.sin(i * 0.87) * 20; // Occasional larger juts
+            const bump3 = Math.sin(i * 0.87) * 20;
             const curveAmount = curve1 + curve2 + curve3 + bump1 + bump2 + bump3;
             
-            // Keep river width mostly consistent, with some variation
             const widthVariation = Math.sin(i * 0.1) * 50 + 450;
             
             const segment = {
                 y: i * 50,
                 leftCurve: curveAmount,
-                rightCurve: curveAmount, // Both banks curve together
-                minGap: widthVariation // Width changes smoothly
+                rightCurve: curveAmount,
+                minGap: widthVariation
             };
             this.riverBanks.push(segment);
             
-            // Add left bank
             const leftBank = this.createBankSegment(true);
             leftBank.y = segment.y;
             leftBank.x = this.config.width / 2 - segment.minGap / 2 + segment.leftCurve;
             bankContainer.addChild(leftBank);
             segment.leftBank = leftBank;
             
-            // Add right bank
             const rightBank = this.createBankSegment(false);
             rightBank.y = segment.y;
             rightBank.x = this.config.width / 2 + segment.minGap / 2 + segment.rightCurve;
@@ -114,10 +99,9 @@ class River {
         const debugBorderContainer = this.world.getChildByLabel('debugBorders');
         if (!bankContainer || !debugBorderContainer) return;
         
-        // Figure out which segments should exist based on player position
         const segmentHeight = 50;
         const currentSegment = Math.floor(playerY / segmentHeight);
-        const visibleRange = 20; // Keep 20 segments ahead/behind
+        const visibleRange = 20;
         
         // Add segments ahead of player
         const targetLow = currentSegment - visibleRange;
