@@ -358,8 +358,8 @@ class Game {
                 backgroundColor: this.config.backgroundColor,
                 targetFrameRate: this.isMobile ? 45 : 60,
                 antialias: false,
-                resolution: this.isMobile ? 1 : window.devicePixelRatio || 1,
-                powerPreference: 'low-power',
+                resolution: this.isMobile ? 0.75 : (window.devicePixelRatio || 1), // Even lower resolution on mobile
+                powerPreference: this.isMobile ? 'low-power' : 'default',
                 maxFPS: this.isMobile ? 45 : 60
             });
         }
@@ -407,8 +407,8 @@ class Game {
 
         this.setupControls();
         
-        this.app.ticker.maxFPS = 60;
-        this.app.ticker.minFPS = 30;
+        this.app.ticker.maxFPS = this.mobileMode ? 45 : 60; // Lower FPS target on mobile
+        this.app.ticker.minFPS = this.mobileMode ? 20 : 30;
         this.app.ticker.add(this.gameLoop);
 
         this.spawnInterval = setInterval(() => this.spawnManager.spawnObstaclePattern(), 2000);
@@ -613,7 +613,7 @@ class Game {
         const elapsed = now - this.lastFrameTime;
         
         // Adaptive frame rate throttling based on performance
-        const minFrameTime = this.mobileMode ? 20 : 16.67; // 50fps mobile, 60fps desktop
+        const minFrameTime = this.mobileMode ? 22 : 16.67; // 45fps mobile, 60fps desktop
         if (elapsed < minFrameTime) {
             return;
         }
@@ -933,7 +933,7 @@ class Game {
             const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
 
             // Process obstacles in batches to reduce per-frame load
-            const obstaclesPerFrame = this.mobileMode ? 8 : 15;
+            const obstaclesPerFrame = this.mobileMode ? 5 : 15;
             const startIdx = (this.frameCounter * obstaclesPerFrame) % this.obstacles.length;
             const endIdx = Math.min(startIdx + obstaclesPerFrame, this.obstacles.length);
 

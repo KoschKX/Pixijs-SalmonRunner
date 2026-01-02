@@ -17,15 +17,6 @@ class HUD {
         
         this.spinnerElement = document.createElement('div');
         this.spinnerElement.id = 'restartSpinner';
-        this.spinnerElement.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            font-size: 40px;
-            color: white;
-            display: none;
-            z-index: 10000;
-        `;
         this.spinnerElement.textContent = '↻';
         document.body.appendChild(this.spinnerElement);
         
@@ -38,14 +29,6 @@ class HUD {
         this.pauseButton = document.createElement('span');
         this.pauseButton.id = 'pauseButton';
         this.pauseButton.textContent = '❚❚';
-        this.pauseButton.style.position = 'fixed';
-        this.pauseButton.style.top = '24px';
-        this.pauseButton.style.right = '32px';
-        this.pauseButton.style.zIndex = 10001;
-        this.pauseButton.style.fontSize = '20px';
-        this.pauseButton.style.color = '#fff';
-        this.pauseButton.style.cursor = 'pointer';
-        this.pauseButton.style.opacity = '0.92';
         this.pauseButton.onmouseenter = () => this.pauseButton.style.opacity = '1';
         this.pauseButton.onmouseleave = () => this.pauseButton.style.opacity = '0.92';
         document.body.appendChild(this.pauseButton);
@@ -53,21 +36,13 @@ class HUD {
 
         this.pauseOverlay = document.createElement('div');
         this.pauseOverlay.id = 'pauseOverlay';
-        this.pauseOverlay.style.position = 'fixed';
-        this.pauseOverlay.style.top = '0';
-        this.pauseOverlay.style.left = '0';
-        this.pauseOverlay.style.width = '100vw';
-        this.pauseOverlay.style.height = '100vh';
-        this.pauseOverlay.style.background = 'rgba(0,0,0,0.45)';
-        this.pauseOverlay.style.zIndex = 999;
-        this.pauseOverlay.style.display = 'none';
-        this.pauseOverlay.style.alignItems = 'center';
-        this.pauseOverlay.style.justifyContent = 'center';
-        this.pauseOverlay.style.fontSize = '48px';
-        this.pauseOverlay.style.color = '#fff';
-        this.pauseOverlay.style.fontWeight = 'bold';
         this.pauseOverlay.textContent = 'PAUSED';
-        document.body.appendChild(this.pauseOverlay);
+        const gameContainer = document.getElementById('gameContainer');
+        if (gameContainer) {
+            gameContainer.appendChild(this.pauseOverlay);
+        } else {
+            document.body.appendChild(this.pauseOverlay);
+        }
 
         this._pauseCallback = null;
         this.pauseButton.addEventListener('click', () => {
@@ -90,7 +65,13 @@ class HUD {
             this.pauseButton.style.fontSize = '24px';
             this.pauseButton.style.letterSpacing = '0px';
         }
-        if (this.pauseOverlay) this.pauseOverlay.style.display = paused ? 'flex' : 'none';
+        if (this.pauseOverlay) {
+            if (paused) {
+                this.pauseOverlay.classList.add('paused');
+            } else {
+                this.pauseOverlay.classList.remove('paused');
+            }
+        }
 
         if (paused) {
             this.showPause();
@@ -318,10 +299,8 @@ class HUD {
     }
 
     showPause() {
-        if (this.pauseOverlay) this.pauseOverlay.style.display = 'block';
     }
 
     hidePause() {
-        if (this.pauseOverlay) this.pauseOverlay.style.display = 'none';
     }
 }

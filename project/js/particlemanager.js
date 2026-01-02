@@ -1,12 +1,12 @@
 class ParticleManager {
     static getMaxParticles() {
-        if (window.game && window.game.mobileMode) return 40; // Reduced from 80
-        return 100; // Reduced from 180
+        if (window.game && window.game.mobileMode) return 25; // Reduced from 40
+        return 100;
     }
 
     static getMaxFoam() {
-        if (window.game && window.game.mobileMode) return 16; // Reduced from 32
-        return 32; // Reduced from 64
+        if (window.game && window.game.mobileMode) return 10; // Reduced from 16
+        return 32;
     }
 
     static createWaterfallWaves(waveWakes, rippleTextures, riverWidth) {
@@ -479,7 +479,7 @@ class ParticleManager {
     }
 
     emitWaterfall(x, y, options = {}) {
-        const count = options.count || (window.game && window.game.mobileMode ? 16 : 24);
+        const count = options.count || (window.game && window.game.mobileMode ? 12 : 24);
         const minSize = options.minSize || 4;
         const maxSize = options.maxSize || 8;
         const minSpeed = options.minSpeed || 6;
