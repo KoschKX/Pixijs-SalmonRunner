@@ -43,6 +43,10 @@ window.InputManager.prototype.setup = function() {
     // Create handler functions
     const keydownHandler = function(e) {
         self.keys[e.key] = true;
+
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+        }
         
         if (e.key === 'Tab') {
             e.preventDefault();
