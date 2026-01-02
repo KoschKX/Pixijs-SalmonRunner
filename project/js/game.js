@@ -1,4 +1,3 @@
-
 let romanticSequence = null;
 const overlayManager = new OverlayManager();
 window.renderer = new Renderer();
@@ -411,7 +410,7 @@ class Game {
         this.app.ticker.minFPS = this.mobileMode ? 20 : 30;
         this.app.ticker.add(this.gameLoop);
 
-        this.spawnInterval = setInterval(() => this.spawnManager.spawnObstaclePattern(), 2000);
+        // Don't start spawning until game starts
         
         window.gameReady = true;
     }
@@ -1676,6 +1675,10 @@ function startGame() {
     }
     if (window.game && typeof window.game.setupControls === 'function') {
         window.game.setupControls();
+    }
+    // Start spawning obstacles
+    if (window.game && !window.game.spawnInterval) {
+        window.game.spawnInterval = setInterval(() => window.game.spawnManager.spawnObstaclePattern(), 2000);
     }
     // Hide preloader and begin level
     hud.hidePreloader();
