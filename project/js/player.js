@@ -1,7 +1,5 @@
-// Handles the main player update and state logic from game.js
 window.Player = window.Player || {};
 window.Player.updatePlayerState = function(game, delta) {
-    // Extracted from game.js: player update, dash, and state logic
     let playerPos = (game.player && typeof game.player.getPosition === 'function') ? game.player.getPosition() : {x: game.config.width/2, y: 0};
     if (game.camera && game.player) {
         const cameraX = game.config.width / 2;
@@ -191,7 +189,6 @@ window.Player.updatePlayerState = function(game, delta) {
                 }
             }
         }
-        // Acceleration
         if (targetVelocityX !== 0) {
             game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * game.config.playerAcceleration * delta.deltaTime;
         } else {
@@ -232,8 +229,7 @@ window.Player.updatePlayerState = function(game, delta) {
     }
     return playerPos;
 };
-// PlayerManager.js
-// Handles player creation, update, setPosition, getContainer, getHitbox, takeDamage
+
 window.Player.getX = function(player) {
     return player && typeof player.getPosition === 'function' ? player.getPosition().x : (player && player.x !== undefined ? player.x : 0);
 };
