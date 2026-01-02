@@ -495,7 +495,6 @@ class Game {
         if (!this.gameState.isDashing && !this.gameState.romanticSceneActive) {
             if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
                 if (!this.gameState.leftKeyPlayedSound) {
-                    console.log('⬅️ Left key pressed, playing lateral splash');
                     if (this.audioManager && typeof this.audioManager.playRandomLateralSplash === 'function') {
                         this.audioManager.playRandomLateralSplash();
                     }
@@ -507,7 +506,6 @@ class Game {
             
             if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                 if (!this.gameState.rightKeyPlayedSound) {
-                    console.log('➡️ Right key pressed, playing lateral splash');
                     if (this.audioManager && typeof this.audioManager.playRandomLateralSplash === 'function') {
                         this.audioManager.playRandomLateralSplash();
                     }
@@ -1302,7 +1300,6 @@ class Game {
             if (!window.restartOnKeyPress) {
                 window.restartOnKeyPress = (e) => {
                     if (e.key !== 'Tab') {
-                        console.log('[Game] Key pressed on win screen:', e.key);
                         window.restartGame();
                     }
                 };
