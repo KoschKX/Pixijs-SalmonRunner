@@ -1,4 +1,3 @@
-
 window.InputManager = function() {
     this.keys = {};
     this.pointerHeld = false;
@@ -12,6 +11,10 @@ window.InputManager = function() {
     this.swipeHorizontal = null;
     this.pointerMoved = false;
 };
+
+// Global flag to prevent duplicate event listeners
+window.InputManager._globalHandlersRegistered = false;
+window.InputManager._globalHandlers = null;
 
 window.InputManager.prototype.getPlayerScreenX = function() {
     const game = window.game;
@@ -27,13 +30,34 @@ window.InputManager.prototype.getPlayerScreenX = function() {
 
 window.InputManager.prototype.setup = function() {
     const self = this;
-    window.addEventListener('keydown', function(e) {
+    
+    // Remove old handlers if they exist
+    if (window.InputManager._globalHandlers) {
+        window.removeEventListener('keydown', window.InputManager._globalHandlers.keydown);
+        window.removeEventListener('keyup', window.InputManager._globalHandlers.keyup);
+        window.removeEventListener('pointerdown', window.InputManager._globalHandlers.pointerdown);
+        window.removeEventListener('pointermove', window.InputManager._globalHandlers.pointermove);
+        window.removeEventListener('pointerup', window.InputManager._globalHandlers.pointerup);
+    }
+    
+    // Create handler functions
+    const keydownHandler = function(e) {
         self.keys[e.key] = true;
-    });
-    window.addEventListener('keyup', function(e) {
+        
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (window.game && window.game.gameState) {
+                window.game.gameState.debugMode = !window.game.gameState.debugMode;
+                console.log('[DEBUG] Debug mode:', window.game.gameState.debugMode);
+            }
+        }
+    };
+    
+    const keyupHandler = function(e) {
         self.keys[e.key] = false;
-    });
-    window.addEventListener('pointerdown', function(e) {
+    };
+    
+    const pointerdownHandler = function(e) {
         self.keys['ArrowLeft'] = false;
         self.keys['ArrowRight'] = false;
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
@@ -61,8 +85,9 @@ window.InputManager.prototype.setup = function() {
         } else if (x > playerScreenX + deadzone) {
             self.keys['ArrowRight'] = true;
         }
-    });
-    window.addEventListener('pointermove', function(e) {
+    };
+    
+    const pointermoveHandler = function(e) {
         if (!self.pointerHeld) return;
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
         let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0,width:1,height:1};
@@ -93,8 +118,9 @@ window.InputManager.prototype.setup = function() {
         if (self.swipeStartY !== null && (Math.abs(y - self.swipeStartY) > 40)) {
             self.pointerMoved = true;
         }
-    });
-    window.addEventListener('pointerup', function(e) {
+    };
+    
+    const pointerupHandler = function(e) {
         const canvas = e.target.closest('canvas') || document.getElementById('gameCanvas');
         let rect = canvas ? canvas.getBoundingClientRect() : {left:0,top:0,width:1,height:1};
         let pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
@@ -134,5 +160,21 @@ window.InputManager.prototype.setup = function() {
         self.pointerX = null;
         self.keys['ArrowLeft'] = false;
         self.keys['ArrowRight'] = false;
-    });
+    };
+    
+    // Store handlers globally so they can be removed later
+    window.InputManager._globalHandlers = {
+        keydown: keydownHandler,
+        keyup: keyupHandler,
+        pointerdown: pointerdownHandler,
+        pointermove: pointermoveHandler,
+        pointerup: pointerupHandler
+    };
+    
+    // Add event listeners
+    window.addEventListener('keydown', keydownHandler);
+    window.addEventListener('keyup', keyupHandler);
+    window.addEventListener('pointerdown', pointerdownHandler);
+    window.addEventListener('pointermove', pointermoveHandler);
+    window.addEventListener('pointerup', pointerupHandler);
 };

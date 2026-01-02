@@ -1,5 +1,6 @@
 class HUD {
     constructor() {
+        this.gameInfoElement = document.getElementById('gameInfo');
         this.healthElement = document.getElementById('health');
         this.distanceElement = document.getElementById('distance');
         this.gameOverElement = document.getElementById('gameOver');
@@ -230,6 +231,7 @@ class HUD {
             setTimeout(() => {
                 this.preloaderElement.classList.add('hidden');
                 if (this.pauseButton) this.pauseButton.style.display = 'block';
+                if (this.gameInfoElement) this.gameInfoElement.style.display = 'block';
                 if (game && game.audioManager) {
                     game.audioManager.playJingle();
                 }
@@ -269,6 +271,8 @@ class HUD {
     }
     
     showGameOver(score, won = false) {
+        if (this.gameInfoElement) this.gameInfoElement.style.display = 'none';
+        
         if (won) {
             this.gameOverTitleElement.textContent = 'WIN';
             this.gameOverMessageElement.textContent = 'You made it to the spawning grounds!';

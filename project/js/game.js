@@ -507,7 +507,6 @@ class Game {
                 this.input.targetX = null;
             }
         }
-
         
         if (this.input.keys['swipeUp']) {
             
@@ -609,7 +608,6 @@ class Game {
         
         if (this.gameState.gameOver && !this.gameState.won) return;
 
-        
         const now = performance.now();
         if (!this.lastFrameTime) this.lastFrameTime = now;
         const elapsed = now - this.lastFrameTime;
@@ -618,19 +616,15 @@ class Game {
         }
         this.lastFrameTime = now;
 
-        
         const actualDelta = delta.deltaTime;
 
-        
         let playerPos = (this.player && typeof this.player.getPosition === 'function') ? this.player.getPosition() : {x: this.config.width/2, y: 0};
-
         
         if (this.camera && this.player) {
             const cameraX = this.config.width / 2;
             this.camera.setTarget(cameraX, playerPos.y);
             this.camera.update(actualDelta);
         }
-
         
         this.frameCounter++;
 
@@ -690,10 +684,8 @@ class Game {
                 }
             }
 
-            
             let targetVelocityX = 0;
             let targetVelocityY = -this.config.scrollSpeed;
-
             
             if (this.gameState.bounceLockout) {
                 
@@ -983,7 +975,6 @@ class Game {
                     obstacle.update(this.config.width, inView);
                 } else if (obstacle instanceof Stone) {
                     if (typeof obstacle.update === 'function') obstacle.update();
-                    // Emit foam for stones in view
                     if (this.particleManager) {
                         this.particleManager.emitFoamAtStone(obstacle);
                     }
@@ -1001,38 +992,30 @@ class Game {
                     obstacle.getContainer() :
                     obstacle;
 
-                // Don't take damage during romantic scene)
                 if (window.Player && window.Player.getPosition && window.Player.setInvincible && this.player.isInvincible) {
                     continue;
                 }
-                // Only skip collision with waterfalls and bears during romantic scene or dashing
                 if ((this.gameState.romanticSceneActive)
                     && (obstacle.type === 'waterfall' || obstacle instanceof Bear)) {
                     continue;
                 }
 
-                // --- Fast collision logic ---
                 let collided = false;
-                // Skip ALL stone collision and knockback/damage if jumping or dashing forward
                 if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
                     continue;
                 }
                 if (obstacle instanceof Stone) {
-                    // Extra guard: skip all stone collision/knockback if jumping or dashing forward
                     if (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward')) {
                         continue;
                     }
-                    // Only get hitboxes if needed
                     const playerBox = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const stoneBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
-                    // STRICT AABB-vs-AABB collision and resolution
                     if (
                         playerBox.x < stoneBox.x + stoneBox.width &&
                         playerBox.x + playerBox.width > stoneBox.x &&
                         playerBox.y < stoneBox.y + stoneBox.height &&
                         playerBox.y + playerBox.height > stoneBox.y
                     ) {
-                        // Find the minimum translation vector to push the fish out
                         const overlapLeft = (playerBox.x + playerBox.width) - stoneBox.x;
                         const overlapRight = (stoneBox.x + stoneBox.width) - playerBox.x;
                         const overlapTop = (playerBox.y + playerBox.height) - stoneBox.y;
@@ -1042,20 +1025,14 @@ class Game {
                         let newY = window.Player.getContainer(this.player).y;
                         if (minOverlap === overlapLeft) {
                             newX -= overlapLeft;
-                            // handled by PlayerManager if needed
                         } else if (minOverlap === overlapRight) {
                             newX += overlapRight;
-                            // handled by PlayerManager if needed
                         } else if (minOverlap === overlapTop) {
                             newY -= overlapTop;
-                            // handled by PlayerManager if needed
                         } else {
                             newY += overlapBottom;
-                            // handled by PlayerManager if needed
                         }
-                        // Set position exactly flush to the edge
                         window.Player.setPosition(this.player, newX, newY);
-                        // Only apply damage/invincibility on first contact
                         if (!this.player.isInvincible) {
                             window.Player.setInvincible(this.player, true);
                             window.Player.setInvincibilityEndTime(this.player, Date.now() + 350);
@@ -1069,19 +1046,15 @@ class Game {
                             this.gameState.health = Math.max(0, this.gameState.health - (obstacle.damage || 20));
                             this.river.createSplash(window.Player.getContainer(this.player).x, window.Player.getContainer(this.player).y, {});
                         }
-                        // Skip further processing for this obstacle in the loop
                         continue;
                     }
                 } else if (obstacle.hitRadius && !(obstacle instanceof Bird)) {
-                    // Only run checkCollision for obstacles with hitRadius, but NOT for Bird
                     if (this.checkCollision && this.checkCollision(this.player.getContainer(), obstacleContainer, obstacle.hitRadius)) {
                         collided = true;
                     }
                 } else if (obstacle instanceof Bear || obstacle instanceof Bird) {
-                    // DEBUG: Log hitboxes for fish and bird/bear
                     const playerBoxDbg = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const obsBoxDbg = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
-                    // Use the same collision logic for bears and birds
                     const playerBox = playerBoxDbg;
                     const obsBox = obsBoxDbg;
                     let boundingOverlap = true;
@@ -1099,7 +1072,6 @@ class Game {
                         collided = true;
                     }
                 } else {
-                    // Only get hitboxes if needed
                     const playerBox = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const obsBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                     let boundingOverlap = true;
@@ -1119,16 +1091,12 @@ class Game {
                 }
 
                 if (collided) {
-                    // Skip stone knockback/damage if jumping or dashing forward
                     if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
                         continue;
                     }
-                    // Smooth collision response for stones
                     if (obstacle instanceof Stone) {
-                        // Only get hitboxes if needed
                         const playerBox = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                         const obsBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
-                        // Calculate knockback direction (from stone to player)
                         const px = playerBox.x + playerBox.width / 2;
                         const py = playerBox.y + playerBox.height / 2;
                         const sx = obsBox.x + obsBox.width / 2;
@@ -1138,42 +1106,33 @@ class Game {
                         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
                         dx /= dist;
                         dy /= dist;
-                        // Apply knockback (tweak strength as needed)
                         const knockback = 40;
                         const newX = playerPos.x + dx * knockback;
                         const newY = playerPos.y + dy * knockback;
-                        // Interpolate for smoothness
                         this.player.setPosition(
                             playerPos.x * 0.7 + newX * 0.3,
                             playerPos.y * 0.7 + newY * 0.3
                         );
-                        // Short invincibility to prevent repeated hits
                         this.player.isInvincible = true;
                         this.player.invincibilityEndTime = Date.now() + 350;
                         this.player.flickerTimer = 0;
-                        // Flash player red
                         if (this.player.setTint) {
                             this.player.setTint(0xff0000);
                             setTimeout(() => {
                                 if (this.player && this.player.setTint) this.player.setTint(0xffffff);
                             }, 100);
                         }
-                        // Take damage
                         this.gameState.health = Math.max(0, this.gameState.health - (obstacle.damage || 20));
                         this.river.createSplash(playerPos.x, playerPos.y, {});
-                        // Remove the stone after collision
                         this.world.removeChild(obstacleContainer);
                         this.obstacles.splice(i, 1);
                         continue;
                     } else {
-                        // Prevent birds from damaging the player during romantic sequence
                         if (obstacle instanceof Bird && this.gameState.romanticSceneActive) {
-                            // Do not apply damage or invincibility, just skip
                             continue;
                         }
                         window.Player.takeDamage(this.player, obstacle.damage, this.gameState);
                         this.river.createSplash(playerPos.x, playerPos.y, {});
-                        // Always flash the fish when hit by a bird
                         if (obstacle instanceof Bird) {
                             window.Player.setInvincible(this.player, true);
                             window.Player.setInvincibilityEndTime(this.player, Date.now() + 1000);
@@ -1190,14 +1149,12 @@ class Game {
                     }
                 }
 
-                // Clean up birds above the top of the visible screen
                 if (obstacle instanceof Bird && obstaclePos.y < playerPos.y - (this.config.height / 2) - 40) {
                     this.world.removeChild(obstacleContainer);
                     this.obstacles.splice(i, 1);
                     this.gameState.birdCount--;
                     this.gameState.score += 10;
                 } else if (obstacle instanceof Bear && obstaclePos.y > playerPos.y + (this.config.height / 2) + 40) {
-                    // Destroy bears when they're below the bottom of the visible screen plus offset
                     this.world.removeChild(obstacleContainer);
                     this.obstacles.splice(i, 1);
                     this.gameState.bearCount--;
@@ -1206,19 +1163,15 @@ class Game {
             }
         }
 
-        // Check goal
         const goal = this.world.getChildByLabel('goal');
         if (goal) {
             goal.x = playerPos.x;
-            // Update goal fish animation using Fish static method
             Fish.updateGoalFish(goal);
 
-            // Check if goal is in view
             const viewTop = playerPos.y - this.config.height / 2;
             const viewBottom = playerPos.y + this.config.height / 2;
             const goalInView = goal.y >= viewTop && goal.y <= viewBottom;
 
-            // Use RomanticSequence for romantic logic
             if (goalInView && !this.romanticSequence.goalInView) {
                 this.romanticSequence.goalInView = false;
                 this.romanticSequence.start(goal, playerPos);
@@ -1230,9 +1183,6 @@ class Game {
 
         this.updateUI();
 
-        // DEBUG: Check if particle update block is running
-
-        // Update particles every frame for smooth 60fps effects
         if (this.particleManager) {
             if (this.gameState.won) {
                 this.particleManager.updateWinHearts(actualDelta);
@@ -1242,12 +1192,10 @@ class Game {
             this.particleManager.updateFoam(actualDelta);
         }
 
-        // Check if health depleted
         if (this.gameState.health <= 0) {
             this.loseGame();
         }
     }
-
 
     updateUI() {
         if (hud) {
@@ -1296,7 +1244,6 @@ class Game {
     }
 
     async restart() {
-                // Remove the game loop from the ticker before resetting to prevent flickering
                 if (this.app && this.app.ticker) {
                     this.app.ticker.remove(this.gameLoop);
                 }
@@ -1347,16 +1294,12 @@ class Game {
         }
         this.romanticSequence = new window.RomanticSequence(this);
 
-        // Reset scroll speed
         this.config.scrollSpeed = this.config.originalScrollSpeed;
 
-        // Reset fish z-indexes
         if (this.player) {
             this.player.getContainer().zIndex = this.originalPlayerZIndex;
         }
 
-        // --- FULL DESTRUCTION OF ALL OBJECTS ---
-        // Remove and destroy all obstacles
         if (this.obstacles && Array.isArray(this.obstacles)) {
             this.obstacles.forEach(obs => {
                 if (obs && typeof obs.destroy === 'function') {
@@ -1375,17 +1318,14 @@ class Game {
         }
         this.obstacles = [];
 
-        // Destroy and null player
         if (this.player && typeof this.player.destroy === 'function') {
             this.player.destroy();
         }
         this.player = null;
 
-        // Destroy and null river (via River API)
         River.destroy(this.river);
         this.river = null;
 
-        // Remove all children from world (if not already destroyed)
         if (this.world && this.world.children && this.world.children.length > 0) {
             while (this.world.children.length > 0) {
                 const child = this.world.children[0];
@@ -1396,20 +1336,17 @@ class Game {
             }
         }
 
-        // Destroy and null camera
         if (this.camera && typeof this.camera.destroy === 'function') {
             this.camera.destroy();
         }
         this.camera = null;
 
-        // Destroy and null particle manager
         if (this.particleManager && typeof this.particleManager.clear === 'function') {
             this.particleManager.clear();
         }
         this.particleManager = null;
         window.particleManager = null;
 
-        // Remove and destroy world
         if (this.world) {
             if (this.world.parent) {
                 this.world.parent.removeChild(this.world);
@@ -1420,19 +1357,15 @@ class Game {
         }
         this.world = null;
 
-        // Null all arrays
         this.riverBanks = [];
         this.waterfalls = [];
         this.riverIslands = [];
         this.wakeTrail = [];
 
-        // --- RECREATE ALL OBJECTS FRESH ---
-        // World container
         this.world = new PIXI.Container();
         this.world.sortableChildren = true;
         this.app.stage.addChild(this.world);
 
-        // Fade overlay
         this.fadeOverlay = new PIXI.Graphics();
         this.fadeOverlay.rect(0, 0, this.config.width, this.config.height);
         this.fadeOverlay.fill(0x000000);
@@ -1440,44 +1373,33 @@ class Game {
         this.fadeOverlay.zIndex = 500;
         this.world.addChild(this.fadeOverlay);
 
-        // Camera
         this.camera = new Camera(this.world, this.config);
 
-        // River
         this.river = new River(this.world, this.config, this.app.renderer);
-        // River constructor calls init()
 
-        // Player
         this.player = new Fish(this.config.width / 2, this.config.height / 2, this);
         this.world.addChild(this.player.getContainer());
 
-        // Recreate river islands
         await this.river.createRiverIslands();
         this.riverBanks = this.river.getBanks();
 
-        // Reconnect wake graphics to player
         const wakeGraphics = this.river.getWakeGraphics();
         if (wakeGraphics) {
             this.player.setWakeGraphics(wakeGraphics);
         }
 
-        // Reset world position
         this.world.y = 0;
 
-        // Reset camera
         const playerPos = this.player.getPosition();
         const cameraX = this.config.width / 2;
         this.camera.setPosition(cameraX, playerPos.y);
         this.camera.setTarget(cameraX, playerPos.y);
 
-        // Recreate goal
         await this.createGoal();
 
-        // Hide game over screen
         overlayManager.hideOverlay('win');
         overlayManager.hideOverlay('lose');
 
-        // Start ticker and interval only once after reset
         if (this.app && this.app.ticker) {
             this.app.ticker.add(this.gameLoop);
             if (!this.app.ticker.started) {
@@ -1487,19 +1409,15 @@ class Game {
         if (!this.spawnInterval) {
             this.spawnInterval = setInterval(() => this.spawnManager.spawnObstaclePattern(), 2000);
         }
-        // Update UI
         this.updateUI();
     }
 
-    // Clean up all resources and stop the game
     destroy() {
-        // Stop obstacle spawn timer
         if (this.spawnInterval) {
             clearInterval(this.spawnInterval);
             this.spawnInterval = null;
         }
 
-        // Clear any pending timeouts
         this.pendingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
         this.pendingTimeouts = [];
 
@@ -1705,6 +1623,12 @@ async function restartGame() {
         overlayManager.hideOverlay('lose');
         document.getElementById('gameOverBackdrop').classList.remove('win');
 
+        // Show preloader and remove hidden class
+        if (hud && hud.preloaderElement) {
+            hud.preloaderElement.style.display = 'flex';
+            hud.preloaderElement.classList.remove('hidden');
+        }
+
         // Show restart spinner
         hud.showRestartSpinner();
 
@@ -1808,12 +1732,12 @@ async function restartGame() {
         // Start game initialization again
         await game.init();
 
-        // Play restart jingle
-        if (game.audioManager && typeof game.audioManager.playJingle === 'function') {
-            game.audioManager.playJingle();
-        }
-
         // Hide restart spinner
         hud.hideRestartSpinner();
+        
+        // Hide preloader and add hidden class back
+        if (hud && typeof hud.hidePreloader === 'function') {
+            hud.hidePreloader();
+        }
     }
 }

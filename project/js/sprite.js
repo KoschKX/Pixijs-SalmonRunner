@@ -162,15 +162,14 @@ class Sprite extends PIXI.Container {
     }
 
     update(inView) {
-        // Track previous inView state
-        // Always refresh debug mode and overlays if in view and debug mode is enabled
-        if (inView && typeof window !== 'undefined' && window.game && window.game.gameState) {
-            if (typeof this.setDebugMode === 'function') {
-                this.setDebugMode(window.game.gameState.debugMode);
-            }
+        // Always refresh debug graphics if in view
+        if (inView) {
+            this.updateDebugGraphics();
         }
+        
         // Debug: log hitbox data for current frame
-        if (this.debugMode && this.animationHitboxes && this.currentAnimation && this.animationHitboxes[this.currentAnimation]) {
+        const debugMode = window.game && window.game.gameState && window.game.gameState.debugMode;
+        if (debugMode && this.animationHitboxes && this.currentAnimation && this.animationHitboxes[this.currentAnimation]) {
             const hitboxData = this.animationHitboxes[this.currentAnimation];
             let frameIndex = 0;
             if (this.sprite && this.sprite.currentFrame !== undefined) {
@@ -179,11 +178,8 @@ class Sprite extends PIXI.Container {
                 frameIndex = Math.floor(this.currentFrame) % hitboxData.frames.length;
             }
             const frameHitbox = hitboxData.frames[frameIndex];
-            // Always refresh debug graphics when debugMode is enabled
-            this.updateDebugGraphics();
-        } else if (this.debugMode) {
-            this.updateDebugGraphics();
         }
+        this.updateDebugGraphics();
     }
 
     updateAnimationAndHitbox() {
@@ -206,9 +202,7 @@ class Sprite extends PIXI.Container {
     setHitbox(hitbox, meshScale = 1) {
         this.hitboxData = hitbox;
         this.meshScale = meshScale;
-        if (this.debugMode) {
-            this.updateDebugGraphics();
-        }
+        this.updateDebugGraphics();
     }
 
     // Returns the hitbox for the current frame, using the same logic as the debug overlay.
@@ -257,23 +251,16 @@ class Sprite extends PIXI.Container {
         };
     }
 
-    setDebugMode(enabled) {
-        this.debugMode = enabled;
-        if (enabled) {
-            if (!this.debugGraphics) {
-                this.debugGraphics = new PIXI.Graphics();
-                this.container.addChild(this.debugGraphics);
-            }
-            this.updateDebugGraphics();
-        } else {
+    updateDebugGraphics() {
+        const debugMode = window.game && window.game.gameState && window.game.gameState.debugMode;
+        
+        if (!debugMode) {
             if (this.debugGraphics) {
                 this.container.removeChild(this.debugGraphics);
                 this.debugGraphics = null;
             }
+            return;
         }
-    }
-
-    updateDebugGraphics() {
                 // Ensure debugGraphics is never scaled
                 if (this.debugGraphics) {
                     this.debugGraphics.scale.set(1, 1);
@@ -286,6 +273,25 @@ class Sprite extends PIXI.Container {
             const color = this.debugColor || 0x00ff00;
             // Use getCurrentHitboxData for overlays
             const hitboxes = this.getCurrentHitboxData();
+            
+            // If no hitbox data from getCurrentHitboxData, try hitboxFrames directly
+            if (!hitboxes && this.hitboxFrames && this.hitboxFrames.length > 0) {
+                const frameIndex = Math.floor(this.currentFrame || 0) % this.hitboxFrames.length;
+                const hitboxData = this.hitboxFrames[frameIndex];
+                if (hitboxData) {
+                    // Apply mesh scale if mesh exists
+                    const scale = this.mesh ? this.meshScale : 1;
+                    this.debugGraphics.rect(
+                        hitboxData.x * scale,
+                        hitboxData.y * scale,
+                        hitboxData.width * scale,
+                        hitboxData.height * scale
+                    );
+                    this.debugGraphics.stroke({ width: 2, color });
+                }
+                return;
+            }
+            
             // Calculate anchor offset (default to center if anchor is not set)
             let anchorX = 0.5, anchorY = 0.5;
             if (this.sprite && this.sprite.anchor) {

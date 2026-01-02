@@ -732,6 +732,8 @@ class River {
         const bankContainer = this.world.getChildByLabel('riverBanks');
         const debugBorderContainer = this.world.getChildByLabel('debugBorders');
         
+        this.updateDebugVisibility();
+        
         if (bankContainer) {
             this.riverBanks.forEach((segment, index) => {
                 // Banks stay at fixed Y positions (no scrolling)
@@ -1088,19 +1090,12 @@ class River {
         return null;
     }
     
-    setDebugMode(enabled) {
+    updateDebugVisibility() {
+        const debugMode = window.game && window.game.gameState && window.game.gameState.debugMode;
         const debugBorderContainer = this.world.getChildByLabel('debugBorders');
         if (debugBorderContainer) {
-            debugBorderContainer.visible = enabled;
+            debugBorderContainer.visible = debugMode;
         }
-        // Toggle stone hitbox visibility
-        this.riverIslands.forEach(stone => {
-            stone.setDebugMode(enabled);
-        });
-        // Toggle waterfall debug boxes
-        this.waterfalls.forEach(waterfall => {
-			waterfall.setDebugMode(enabled);
-        });
     }
 }
 
