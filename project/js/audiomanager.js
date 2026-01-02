@@ -123,7 +123,7 @@ class AudioManager {
         
         // Clone if it's an HTML Audio element, otherwise play directly
         const audioToPlay = sound.cloneNode ? sound.cloneNode() : sound;
-        audioToPlay.volume = 0.3; // Lower volume for lateral movement
+        audioToPlay.volume = 0.125; // Half volume for lateral movement
         
         audioToPlay.play();
     }

@@ -16,7 +16,7 @@ body {
     background-position: center !important;
 }
 #gameContainer {
-display: flex;
+    display: flex;
     justify-content: center;
     align-items: center;
     width: 100vw;
@@ -44,7 +44,8 @@ display: flex;
 #gameCanvas {
     width: 100% !important;
     height: 100%;
-    object-fit: contain;
+    /* object-fit: contain; */
+    object-fit: cover;
 }
 #gameInfo {
     position: absolute;
@@ -113,6 +114,8 @@ display: flex;
     object-fit: contain;
     overflow: hidden;
     aspect-ratio: 1 / 1;
+
+    height: 100%;
 }
 
 #preloader {

@@ -644,7 +644,24 @@ class Game {
         let playerPos = (this.player && typeof this.player.getPosition === 'function') ? this.player.getPosition() : {x: this.config.width/2, y: 0};
         
         if (this.camera && this.player) {
-            const cameraX = this.config.width / 2;
+            // Calculate camera X to follow player horizontally when viewport is narrow
+            const viewportWidth = window.innerWidth;
+            const gameWidth = 1000; // Original game width
+            
+            let cameraX;
+            if (viewportWidth >= gameWidth) {
+                // Viewport is wide enough - center camera at middle of game
+                cameraX = gameWidth / 2;
+            } else {
+                // Viewport is narrower - follow player to keep them visible
+                const halfViewport = viewportWidth / 2;
+                const minCameraX = halfViewport;
+                const maxCameraX = gameWidth - halfViewport;
+                
+                // Clamp camera to keep it within bounds
+                cameraX = Math.max(minCameraX, Math.min(maxCameraX, playerPos.x));
+            }
+            
             this.camera.setTarget(cameraX, playerPos.y);
             this.camera.update(actualDelta);
         }
