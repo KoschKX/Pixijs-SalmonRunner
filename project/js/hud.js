@@ -8,14 +8,12 @@ class HUD {
         this.gameOverMessageElement = document.getElementById('gameOverMessage');
         this.finalDistanceElement = document.getElementById('finalDistance');
         
-        // Elements for the loading screen
         this.preloaderElement = document.getElementById('preloader');
         this.progressBarElement = document.querySelector('.progress-bar');
         this.progressTextElement = document.querySelector('.progress-text');
         this.progressTextFilledElement = document.querySelector('.progress-text-filled');
         this.loadingInterval = null;
         
-        // Create the restart spinner
         this.spinnerElement = document.createElement('div');
         this.spinnerElement.id = 'restartSpinner';
         this.spinnerElement.style.cssText = `
@@ -50,9 +48,8 @@ class HUD {
         this.pauseButton.onmouseenter = () => this.pauseButton.style.opacity = '1';
         this.pauseButton.onmouseleave = () => this.pauseButton.style.opacity = '0.92';
         document.body.appendChild(this.pauseButton);
-        this.pauseButton.style.display = 'none'; // Hidden until game starts
+        this.pauseButton.style.display = 'none';
 
-        // Overlay shown when game is paused
         this.pauseOverlay = document.createElement('div');
         this.pauseOverlay.id = 'pauseOverlay';
         this.pauseOverlay.style.position = 'fixed';
@@ -76,7 +73,6 @@ class HUD {
             if (typeof this._pauseCallback === 'function') this._pauseCallback();
         });
 
-        // HUDManager elements
         this.hudElement = document.getElementById('hud');
         this.scoreElement = document.getElementById('score');
         this.winOverlay = document.getElementById('win-overlay');
@@ -89,14 +85,12 @@ class HUD {
 
     setPauseState(paused) {
         if (this.pauseButton) {
-            // Switch between pause and play icons
             this.pauseButton.textContent = paused ? '▶' : '❚❚';
-            this.pauseButton.style.fontSize = '24px'; // Keep icon size consistent
+            this.pauseButton.style.fontSize = '24px';
             this.pauseButton.style.letterSpacing = '0px';
         }
         if (this.pauseOverlay) this.pauseOverlay.style.display = paused ? 'flex' : 'none';
 
-        // Also call showPause/hidePause for compatibility
         if (paused) {
             this.showPause();
         } else {
@@ -114,25 +108,24 @@ class HUD {
     }
     
     update(health, distance) {
-        // Show health as hearts (1 heart = 10 health)
+        // 1 heart = 10 health
         const hearts = Math.ceil(health / 10);
         const maxHearts = 10;
         let heartDisplay = '';
         
         for (let i = 0; i < maxHearts; i++) {
             if (i < hearts) {
-                heartDisplay += '\u2665 ';
+                heartDisplay += '<span style="color: #ff4466;">♥</span> ';
             } else {
-                heartDisplay += '\u2661 ';
+                heartDisplay += '<span style="color: rgba(255, 68, 102, 0.25);">♥</span> ';
             }
         }
         
-        this.healthElement.textContent = heartDisplay.trim();
-        this.healthElement.style.fontSize = '2em'; // Larger heart icons
-        // Clamp display to goal if close enough
+        this.healthElement.innerHTML = heartDisplay.trim();
+        this.healthElement.style.fontSize = '2em';
+        
         let displayDistance = distance;
         if (window.game && window.game.config && typeof window.game.config.goalDistance === 'number') {
-            // Clamp if romantic sequence is active or game is won
             if ((window.game.gameState && window.game.gameState.romanticSceneActive) || (window.game.gameState && window.game.gameState.won)) {
                 displayDistance = window.game.config.goalDistance;
             } else {
@@ -146,7 +139,6 @@ class HUD {
                         playerY = player.y;
                     }
                 }
-                // Clamp if within 30px of goal or within 1 unit of goal distance
                 if (
                     (playerY !== null && Math.abs(playerY - goalY) < 30) ||
                     (Math.abs(distance - window.game.config.goalDistance) <= 1)
@@ -171,7 +163,6 @@ class HUD {
     
     updatePreloader(progress) {
         if (this.progressBarElement && this.progressTextElement && this.progressTextFilledElement) {
-            // Only update if the value changed
             if (this.progressBarElement.style.width !== progress + '%') {
                 this.progressBarElement.style.width = progress + '%';
             }
@@ -179,18 +170,15 @@ class HUD {
                 this.progressTextElement.textContent = progress + '%';
                 this.progressTextFilledElement.textContent = progress + '%';
             }
-            // Always display both progress texts
             this.progressTextElement.style.display = 'block';
             this.progressTextFilledElement.style.display = 'block';
-            // Sync the blue text reveal with the progress bar
+            
             const barContainer = this.progressBarElement.parentElement;
             if (barContainer) {
-                // Only measure layout if progress is between 0 and 100
                 if (progress > 0 && progress < 100) {
                     const barRect = barContainer.getBoundingClientRect();
                     const barWidth = barRect.width;
                     const revealWidth = barWidth * (progress / 100);
-                    // Center the progress text
                     this.progressTextElement.style.position = 'absolute';
                     this.progressTextElement.style.left = '50%';
                     this.progressTextElement.style.top = '50%';
@@ -202,7 +190,6 @@ class HUD {
                     this.progressTextFilledElement.style.width = '';
                     this.progressTextFilledElement.style.overflow = '';
                     this.progressTextFilledElement.style.zIndex = '2';
-                    // Calculate how much of the text to reveal
                     const textRect = this.progressTextElement.getBoundingClientRect();
                     const textWidth = textRect.width;
                     const barRectLeft = barContainer.getBoundingClientRect().left;
@@ -213,7 +200,6 @@ class HUD {
                     }
                     this.progressTextFilledElement.style.clipPath = `inset(0 ${textWidth - split}px 0 0)`;
                 } else {
-                    // For 0% or 100%, show or hide the filled text
                     this.progressTextFilledElement.style.clipPath = '';
                 }
             }
@@ -229,7 +215,7 @@ class HUD {
                 this.updatePreloader(progress);
                 lastProgress = progress;
             }
-        }, 250); // Update every 250ms
+        }, 250);
         return this.loadingInterval;
     }
     
@@ -243,9 +229,7 @@ class HUD {
             this.updatePreloader(100);
             setTimeout(() => {
                 this.preloaderElement.classList.add('hidden');
-                // Show pause button when game starts
                 if (this.pauseButton) this.pauseButton.style.display = 'block';
-                // Play jingle at level start
                 if (game && game.audioManager) {
                     game.audioManager.playJingle();
                 }
@@ -258,13 +242,12 @@ class HUD {
         this.spinnerRotation = 0;
         this.spinnerStartTime = performance.now();
         
-        // Center the spinner on screen
         this.spinnerElement.style.marginLeft = '-20px';
         this.spinnerElement.style.marginTop = '-20px';
         
         const animate = () => {
             const elapsed = performance.now() - this.spinnerStartTime;
-            this.spinnerRotation = (elapsed * 0.36) % 360; // Rotate 360° per second
+            this.spinnerRotation = (elapsed * 0.36) % 360;
             this.spinnerElement.style.transform = `rotate(${this.spinnerRotation}deg)`;
             this.spinnerAnimationId = requestAnimationFrame(animate);
         };

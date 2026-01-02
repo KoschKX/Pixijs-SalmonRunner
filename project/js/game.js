@@ -268,7 +268,7 @@ class Game {
                     const now = performance.now();
                     const dt = now - last;
                     last = now;
-                    if (dt > 20) {} // removed debug log
+                    if (dt > 20) {}
                 });
             }
             
@@ -293,7 +293,6 @@ class Game {
                     if (t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0))) valid = true;
                     return `${k}: ${valid ? 'OK' : 'INVALID'}`;
                 });
-                // removed debug log
             }
         }
         
@@ -367,7 +366,6 @@ class Game {
         this.sceneManager = new SceneManager(this.app);
         this.world = this.sceneManager.createWorld();
 
-        
         this.fadeOverlay = new PIXI.Graphics();
         this.fadeOverlay.rect(0, 0, this.config.width, this.config.height);
         this.fadeOverlay.fill(0x000000);
@@ -379,7 +377,6 @@ class Game {
         
         this.camera = new Camera(this.world, this.config);
 
-        // Modular river system: all logic via River API
         this.river = River.create(this.world, this.config, this.app.renderer);
         this.riverBanks = River.getBanks(this.river);
         await River.createRiverIslands(this.river);
@@ -390,10 +387,8 @@ class Game {
             this.river.getPathAtY ? this.river.getPathAtY.bind(this.river) : () => ({curve:0})
         );
         window.particleManager = this.particleManager;
-
         
         this.createPlayer();
-
         
         const initialPlayerPos = this.player.getPosition();
         this.gameState.startY = initialPlayerPos.y;
@@ -403,7 +398,6 @@ class Game {
         this.camera.setPosition(cameraX, playerPos.y);
         this.camera.setTarget(cameraX, playerPos.y);
 
-        
         const wakeGraphics = River.getWakeGraphics(this.river);
         if (wakeGraphics) {
             this.player.setWakeGraphics(wakeGraphics);
@@ -411,16 +405,13 @@ class Game {
 
         await this.createGoal();
 
-        
         this.setupControls();
-
         
         this.app.ticker.maxFPS = 60;
         this.app.ticker.minFPS = 30;
         this.app.ticker.add(this.gameLoop);
 
         this.spawnInterval = setInterval(() => this.spawnManager.spawnObstaclePattern(), 2000);
-
         
         window.gameReady = true;
     }
@@ -831,7 +822,6 @@ class Game {
                         if (this.gameState.dashDirection !== 'backward') {
                             targetVelocityX = 0;
                         } else {
-                            // Minimal left/right control for back dash (already handled above)
                         }
                     } else {
                         if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
@@ -856,7 +846,6 @@ class Game {
                 }
             }
 
-            // Acceleration
             if (targetVelocityX !== 0) {
                 this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * this.config.playerAcceleration * actualDelta;
             } else {
@@ -869,21 +858,18 @@ class Game {
                 this.gameState.playerVelocityY *= Math.pow(this.config.playerFriction, actualDelta);
             }
             
-            // --- Moderate left/right control during jump ---
             if (this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A']) {
-                targetVelocityX = -this.config.playerMaxSpeed * 1.35; // Moderate boost
+                targetVelocityX = -this.config.playerMaxSpeed * 1.35;
             } else if (this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) {
                 targetVelocityX = this.config.playerMaxSpeed * 1.35;
             } else {
                 targetVelocityX = 0;
             }
-            // Slightly increased acceleration for jump
             var jumpAccel = this.config.playerAcceleration * 1.5;
             this.gameState.playerVelocityX += (targetVelocityX - this.gameState.playerVelocityX) * jumpAccel * actualDelta;
 
             let newX = playerPos.x + this.gameState.playerVelocityX * actualDelta;
             let newY = playerPos.y + this.gameState.playerVelocityY * actualDelta;
-            // Clamp X so fish cannot move past pointer while dragging
             if (this.input.pointerHeld && typeof this.input.pointerX === 'number') {
                 if ((this.gameState.playerVelocityX > 0 && newX > this.input.pointerX && playerPos.x <= this.input.pointerX) ||
                     (this.gameState.playerVelocityX < 0 && newX < this.input.pointerX && playerPos.x >= this.input.pointerX)) {
@@ -892,39 +878,30 @@ class Game {
                 }
             }
                 window.Player.setPosition(this.player, newX, newY);
-                // --- HARD DEADZONE: forcibly zero velocity if no input and velocity is small ---
                 if (!(this.input.keys['ArrowLeft'] || this.input.keys['a'] || this.input.keys['A'] || this.input.keys['ArrowRight'] || this.input.keys['d'] || this.input.keys['D']) && Math.abs(this.gameState.playerVelocityX) < 0.2) {
                     this.gameState.playerVelocityX = 0;
                 }
                 playerPos = window.Player.getPosition(this.player);
                 window.Player.update(this.player, this.gameState.playerVelocityX, this.gameState.playerVelocityY);
                 if (this.player && typeof this.player.updateWake === 'function') this.player.updateWake(this.gameState.scrollOffset);
-
-            // Camera is now updated in its own loop (see startCameraLoop)
         }
 
-        // Keep fade overlay fixed on screen (don't scroll with camera)
         if (this.fadeOverlay) {
             this.fadeOverlay.x = -this.world.x;
             this.fadeOverlay.y = -this.world.y;
         }
 
-        // Always check river bank collision, even during romantic scene
         if (!this.gameState.won) {
             River.checkBankCollision(this.river, this.player, this.gameState.isDashing, this.gameState);
         }
 
-        // Update distance and trigger romantic sequence if goal reached
         if (!this.gameState.won) {
-            // Guard against NaN distance
             const startY = (typeof this.gameState.startY === 'number') ? this.gameState.startY : playerPos.y;
             const distanceTraveled = startY - playerPos.y;
             this.gameState.distance = Number.isFinite(distanceTraveled) ? Math.max(0, Math.round(distanceTraveled / 10)) : 0;
 
-            // Trigger romantic sequence when goal distance is reached
-            // Allow a small margin for rounding issues and Y position
             const goalY = -(this.config.goalDistance * 10);
-            const yMargin = 20; // pixels
+            const yMargin = 20;
             if (
                 (this.gameState.distance >= this.config.goalDistance - 2 || Math.abs(playerPos.y - goalY) < yMargin) &&
                 !this.gameState.romanticSceneActive &&
@@ -936,12 +913,10 @@ class Game {
             }
         }
 
-        // Throttle updates more aggressively on mobile
         const bankSkip = this.mobileMode ? 6 : 3;
         const waterfallSkip = this.mobileMode ? 4 : 2;
         const islandSkip = this.mobileMode ? 4 : 2;
 
-        // Update river system (all logic via River API)
         if (!this.gameState.won && this.frameCounter % bankSkip === 0) {
             River.updateBanks(this.river, playerPos);
         }
@@ -957,9 +932,7 @@ class Game {
             River.updateIslands(this.river, playerPos, this.player, this.config.height, viewBuffer, this.gameState);
         }
 
-        // Update obstacles with more aggressive culling on mobile
         if (!this.gameState.won) {
-            // Increase culling buffer on mobile
             const cullMultiplier = this.mobileMode ? 0.5 : 1;
             const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2 * cullMultiplier;
             const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
