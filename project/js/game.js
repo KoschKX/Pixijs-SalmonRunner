@@ -289,22 +289,35 @@ class Game {
         await this.preloadResources();
 
         
+        // Defer heavy texture generation until after the first frame so
+        // startup work doesn't block the initial rAF handler.
         if (this.app && typeof ParticleManager.generateParticleTextures === 'function') {
-            ParticleManager.generateParticleTextures();
-            
-            if (window.ParticleManager && window.ParticleManager.textures) {
-                const keys = Object.keys(window.ParticleManager.textures);
-                const summary = keys.map(k => {
-                    const t = window.ParticleManager.textures[k];
-                    let valid = false;
-                    if (t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0))) valid = true;
-                    return `${k}: ${valid ? 'OK' : 'INVALID'}`;
-                });
-            }
+            requestAnimationFrame(() => {
+                try {
+                    ParticleManager.generateParticleTextures();
+                    if (window.ParticleManager && window.ParticleManager.textures) {
+                        const keys = Object.keys(window.ParticleManager.textures);
+                        const summary = keys.map(k => {
+                            const t = window.ParticleManager.textures[k];
+                            let valid = false;
+                            if (t && (t.valid || (t.source && t.source.width > 0 && t.source.height > 0))) valid = true;
+                            return `${k}: ${valid ? 'OK' : 'INVALID'}`;
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Particle texture generation deferred error', e);
+                }
+            });
         }
-        
+
         if (this.app && typeof Waterfall.generateSplashTextures === 'function') {
-            Waterfall.generateSplashTextures(this.app.renderer);
+            requestAnimationFrame(() => {
+                try {
+                    Waterfall.generateSplashTextures(this.app.renderer);
+                } catch (e) {
+                    console.warn('Waterfall splash generation deferred error', e);
+                }
+            });
         }
         
         this.gameState = new GameState({
@@ -414,9 +427,27 @@ class Game {
 
         this.setupControls();
         
-        this.app.ticker.maxFPS = 60;
-        this.app.ticker.minFPS = 30;
+        // Start the ticker throttled to avoid an initial burst of rendering
+        // work; restore full framerate after a short delay.
+        try {
+            this.app.ticker.maxFPS = 30;
+            this.app.ticker.minFPS = 15;
+        } catch (e) {}
         this.app.ticker.add(this.gameLoop);
+
+        // Temporarily increase sort interval to avoid expensive sorting on first frames
+        const _originalSortInterval = this._sortInterval;
+        this._sortInterval = Math.max(300, this._sortInterval || 30);
+
+        setTimeout(() => {
+            try {
+                if (this.app && this.app.ticker) {
+                    this.app.ticker.maxFPS = 60;
+                    this.app.ticker.minFPS = 30;
+                }
+            } catch (e) {}
+            this._sortInterval = _originalSortInterval || 30;
+        }, 2000);
 
         // Don't start spawning until game starts
         
