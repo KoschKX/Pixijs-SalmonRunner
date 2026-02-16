@@ -95,6 +95,20 @@ class Game {
         this._perfAlpha = 0.06; // EMA smoothing
         this._adaptiveMode = false; // when true, apply stronger throttles
         this._sortInterval = 30; // obstacle sort interval (can increase under load)
+        this._sortThreshold = 20; // only sort when obstacles exceed this
+        this._lastHudHealth = null;
+        this._lastHudDistance = null;
+        // Lightweight frame profiler settings
+        this._frameProfilerEnabled = true;
+        this._frameProfilerThreshold = 50; // ms, warn when frame exceeds
+        this._perfSectionEMA = {};
+        this._perfEMAAlpha = 0.08;
+        // Container caching and lightweight spatial tuning
+        this._obstacleContainerCacheEnabled = true;
+        this._obstacleBuckets = {}; // reserved for future spatial index
+        this._bucketSize = Math.max(200, Math.floor(this.config.height / 4));
+        this._bucketRebuildInterval = 30; // frames
+        this._lastBucketRebuild = 0;
         this.gameLoop = this.gameLoop.bind(this);
     }
 
@@ -184,14 +198,44 @@ class Game {
         await Stone.initAssets(resources);
     }
     updateObstacles() {
-        
-        this.obstacles = this.obstacles.filter(obs => {
-            if (obs.type === 'bird' && obs.destroyed) {
+        // Remove destroyed birds in-place to avoid array reallocations
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            if (obs && obs.type === 'bird' && obs.destroyed) {
                 this.gameState.birdCount = Math.max(0, this.gameState.birdCount - 1);
-                return false;
+                if (obs) obs._removed = true;
+                this.obstacles.splice(i, 1);
             }
-            return true;
-        });
+        }
+    }
+
+    buildObstacleBuckets() {
+        // Simple vertical bucketing by y position.
+        this._obstacleBuckets = {};
+        const size = this._bucketSize || 400;
+        for (let i = 0; i < this.obstacles.length; i++) {
+            const o = this.obstacles[i];
+            if (!o) continue;
+            const pos = (o._cachedPos && o._lastPosFrame === this.frameCounter) ? o._cachedPos : (typeof o.getPosition === 'function' ? o.getPosition() : (o.getContainer ? o.getContainer() : { y: o.y }));
+            const idx = Math.floor((pos.y || 0) / size);
+            if (!this._obstacleBuckets[idx]) this._obstacleBuckets[idx] = [];
+            this._obstacleBuckets[idx].push(o);
+        }
+        this._lastBucketRebuild = this.frameCounter;
+    }
+
+    getObstaclesInBucketRange(viewTop, viewBottom) {
+        const size = this._bucketSize || 400;
+        const start = Math.floor(viewTop / size) - 1;
+        const end = Math.floor(viewBottom / size) + 1;
+        const res = [];
+        for (let i = start; i <= end; i++) {
+            const arr = this._obstacleBuckets[i];
+            if (arr && arr.length) {
+                for (let j = 0; j < arr.length; j++) res.push(arr[j]);
+            }
+        }
+        return res;
     }
     
     setupDebouncedResize() {
@@ -426,6 +470,8 @@ class Game {
         await this.createGoal();
 
         this.setupControls();
+        // Set up tap zones: tapping top third -> jump, bottom third -> back-dash
+        this.setupTapZones();
         
         // Start the ticker throttled to avoid an initial burst of rendering
         // work; restore full framerate after a short delay.
@@ -452,6 +498,161 @@ class Game {
         // Don't start spawning until game starts
         
         window.gameReady = true;
+    }
+
+    createMobileButtons() {
+        try {
+            if (this._mobileButtons) return;
+            const self = this;
+            const container = document.createElement('div');
+            container.style.position = 'fixed';
+            container.style.left = '0';
+            container.style.right = '0';
+            container.style.bottom = '0';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = 9999;
+
+            const makeBtn = (label, side) => {
+                const btn = document.createElement('button');
+                btn.textContent = label;
+                btn.style.pointerEvents = 'auto';
+                btn.style.position = 'absolute';
+                btn.style.bottom = '18px';
+                btn.style[side] = '18px';
+                btn.style.width = '84px';
+                btn.style.height = '84px';
+                btn.style.borderRadius = '42px';
+                btn.style.background = 'rgba(0,0,0,0.45)';
+                btn.style.color = '#fff';
+                btn.style.fontSize = '18px';
+                btn.style.border = 'none';
+                btn.style.touchAction = 'none';
+                btn.style.userSelect = 'none';
+                btn.style.WebkitTapHighlightColor = 'transparent';
+                return btn;
+            };
+
+            const jumpBtn = makeBtn('Jump', 'right');
+            const backBtn = makeBtn('Back', 'left');
+
+            // Touch / mouse handlers
+            const startKey = (key) => {
+                try { if (self.input && self.input.keys) self.input.keys[key] = true; } catch (e) {}
+            };
+            const endKey = (key) => {
+                try { if (self.input && self.input.keys) self.input.keys[key] = false; } catch (e) {}
+            };
+
+            const addListeners = (el, key) => {
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); startKey(key); }, { passive: false });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); endKey(key); }, { passive: false });
+                el.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); startKey(key); });
+                el.addEventListener('mouseup', (e) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); endKey(key); });
+                el.addEventListener('mouseleave', (e) => { try { e.stopPropagation(); e.stopImmediatePropagation(); } catch (er) {} endKey(key); });
+            };
+
+            addListeners(jumpBtn, 'ArrowUp');
+            addListeners(backBtn, 'ArrowDown');
+
+            container.appendChild(backBtn);
+            container.appendChild(jumpBtn);
+            document.body.appendChild(container);
+            // Only show on small viewports by default
+            try {
+                const threshold = 800;
+                container.style.display = (typeof window !== 'undefined' && window.innerWidth <= threshold) ? 'block' : 'none';
+            } catch (e) {}
+
+            this._mobileButtons = { container, jumpBtn, backBtn };
+        } catch (e) {
+            console.warn('createMobileButtons error', e);
+        }
+    }
+
+    setupTapZones() {
+        try {
+            if (this._tapZoneListenersAdded) return;
+            const self = this;
+            const getRelY = (clientY) => {
+                try {
+                    if (this.canvas && this.canvas.getBoundingClientRect) {
+                        const r = this.canvas.getBoundingClientRect();
+                        return (clientY - r.top) / (r.height || window.innerHeight || 1);
+                    }
+                } catch (e) {}
+                return clientY / (window.innerHeight || 1);
+            };
+
+            const startKey = (key) => { try { if (self.input && self.input.keys) self.input.keys[key] = true; } catch (e) {} };
+            const endKeys = () => { try { if (self.input && self.input.keys) { self.input.keys['ArrowUp'] = false; self.input.keys['ArrowDown'] = false; } } catch (e) {} };
+
+            const onTouchStart = (e) => {
+                try {
+                    if (!e) return;
+                    e.preventDefault(); e.stopPropagation();
+                    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+                    if (!t) return;
+                    const frac = getRelY(t.clientY);
+                    if (frac <= (1/3)) startKey('ArrowUp');
+                    else if (frac >= (2/3)) startKey('ArrowDown');
+                } catch (er) {}
+            };
+            const onTouchEnd = (e) => { try { if (e) { e.preventDefault(); e.stopPropagation(); } endKeys(); } catch (er) {} };
+
+            const onMouseDown = (e) => {
+                try {
+                    if (!e) return;
+                    e.preventDefault(); e.stopPropagation();
+                    const frac = getRelY(e.clientY);
+                    if (frac <= (1/3)) startKey('ArrowUp');
+                    else if (frac >= (2/3)) startKey('ArrowDown');
+                } catch (er) {}
+            };
+            const onMouseUp = (e) => { try { if (e) { e.preventDefault(); e.stopPropagation(); } endKeys(); } catch (er) {} };
+
+            const target = (this.canvas && this.canvas.ownerDocument) ? this.canvas : window;
+            try {
+                target.addEventListener('touchstart', onTouchStart, { passive: false });
+                target.addEventListener('touchend', onTouchEnd, { passive: false });
+            } catch (e) {
+                // fallback
+                window.addEventListener('touchstart', onTouchStart, { passive: false });
+                window.addEventListener('touchend', onTouchEnd, { passive: false });
+            }
+            target.addEventListener('mousedown', onMouseDown);
+            target.addEventListener('mouseup', onMouseUp);
+
+            this._tapZoneListeners = { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp };
+            this._tapZoneListenersAdded = true;
+        } catch (e) {
+            console.warn('setupTapZones error', e);
+        }
+    }
+
+    removeTapZones() {
+        try {
+            if (!this._tapZoneListenersAdded || !this._tapZoneListeners) return;
+            const { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp } = this._tapZoneListeners;
+            try { target.removeEventListener('touchstart', onTouchStart, { passive: false }); } catch (e) { try { window.removeEventListener('touchstart', onTouchStart, { passive: false }); } catch (e) {} }
+            try { target.removeEventListener('touchend', onTouchEnd, { passive: false }); } catch (e) { try { window.removeEventListener('touchend', onTouchEnd, { passive: false }); } catch (e) {} }
+            try { target.removeEventListener('mousedown', onMouseDown); } catch (e) { }
+            try { target.removeEventListener('mouseup', onMouseUp); } catch (e) { }
+            this._tapZoneListeners = null;
+            this._tapZoneListenersAdded = false;
+        } catch (e) {
+            console.warn('removeTapZones error', e);
+        }
+    }
+
+    removeMobileButtons() {
+        try {
+            if (!this._mobileButtons) return;
+            const { container } = this._mobileButtons;
+            if (container && container.parentNode) container.parentNode.removeChild(container);
+            this._mobileButtons = null;
+        } catch (e) {
+            console.warn('removeMobileButtons error', e);
+        }
     }
 
 
@@ -732,6 +933,8 @@ class Game {
         }
         
         this.frameCounter++;
+        // Ensure obstaclesTime is always defined for the frame profiler
+        let obstaclesTime = 0;
 
         if (!this.gameState.won) {
             const now = Date.now();
@@ -1043,7 +1246,8 @@ class Game {
             const totalObstacles = this.obstacles.length;
             
             // Sort by distance to player periodically (interval increases under load)
-            if (!this._obstaclesSorted || this.frameCounter % this._sortInterval === 0) {
+            // Only perform full sort when obstacle count is large enough to justify the cost
+            if (this.obstacles.length > (this._sortThreshold || 20) && (!this._obstaclesSorted || this.frameCounter % this._sortInterval === 0)) {
                 this.obstacles.sort((a, b) => {
                     const aPos = a._cachedPos || { y: 0 };
                     const bPos = b._cachedPos || { y: 0 };
@@ -1052,64 +1256,77 @@ class Game {
                 this._obstaclesSorted = true;
             }
 
-            for (let i = this.obstacles.length - 1; i >= 0; i--) {
-                const obstacle = this.obstacles[i];
-                // Spread obstacle updates across frames to reduce per-frame spikes
-                // Exempt Bears and Birds so they update every frame (keeps their movement responsive)
-                if (this.obstacleUpdateSpreadFrames && !(obstacle instanceof Bear || obstacle instanceof Bird) && ((i % this.obstacleUpdateSpreadFrames) !== (this._obstacleUpdateCursor % this.obstacleUpdateSpreadFrames))) {
-                    continue;
+            // Cache per-frame player container and hitbox to avoid repeated lookups
+            const playerContainer = (window.Player && typeof window.Player.getContainer === 'function' && this.player) ? window.Player.getContainer(this.player) : null;
+            const playerBoxFrame = (window.Player && typeof window.Player.getHitbox === 'function' && this.player) ? window.Player.getHitbox(this.player) : null;
+
+            const obstStart = this._frameProfilerEnabled ? performance.now() : 0;
+            // Use spatial buckets when available to reduce obstacle iteration
+            let obstaclesToProcess = this.obstacles;
+            if (this._obstacleContainerCacheEnabled) {
+                if (!this._obstacleBuckets || (this.frameCounter - (this._lastBucketRebuild || 0) >= (this._bucketRebuildInterval || 30))) {
+                    this.buildObstacleBuckets();
                 }
-                
+                obstaclesToProcess = this.getObstaclesInBucketRange(viewTop, viewBottom) || this.obstacles;
+            }
+            for (let k = obstaclesToProcess.length - 1; k >= 0; k--) {
+                const obstacle = obstaclesToProcess[k];
+                if (!obstacle || obstacle._removed) continue;
+
+                // Prefer `type` checks when available to avoid repeated `instanceof` work
+                const isBear = obstacle && (obstacle.type === 'bear' || obstacle instanceof Bear);
+                const isBird = obstacle && (obstacle.type === 'bird' || obstacle instanceof Bird);
+                const isNet = obstacle && (obstacle.type === 'net' || obstacle instanceof Net);
+                const isStone = obstacle && (obstacle.type === 'stone' || obstacle.type === 'rock' || obstacle instanceof Stone);
+
+                // Spread obstacle updates across frames to reduce per-frame spikes
+                // (actual per-frame decision deferred until we have obstaclePos to bucket by Y)
+
                 // Cache position lookups
                 let obstaclePos;
                 if (obstacle._cachedPos && this.frameCounter - obstacle._lastPosFrame < 3) {
                     obstaclePos = obstacle._cachedPos;
                 } else {
-                    if (
-                        (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net) && typeof obstacle.getPosition === 'function'
-                    ) {
+                    if ((isBear || isBird || isNet) && typeof obstacle.getPosition === 'function') {
                         obstaclePos = obstacle.getPosition();
-                    } else if (obstacle instanceof Stone && typeof obstacle.getPosition === 'function') {
+                    } else if (isStone && typeof obstacle.getPosition === 'function') {
                         obstaclePos = obstacle.getPosition();
                     } else if (obstacle.getContainer && obstacle.getContainer().x !== undefined && obstacle.getContainer().y !== undefined) {
-                        obstaclePos = {
-                            x: obstacle.getContainer().x,
-                            y: obstacle.getContainer().y
-                        };
+                        const c = obstacle.getContainer();
+                        obstaclePos = { x: c.x, y: c.y };
                     } else {
-                        obstaclePos = {
-                            x: obstacle.x,
-                            y: obstacle.y
-                        };
+                        obstaclePos = { x: obstacle.x, y: obstacle.y };
                     }
                     obstacle._cachedPos = obstaclePos;
                     obstacle._lastPosFrame = this.frameCounter;
                 }
 
+                // Now apply spread throttling using obstacle Y to distribute work
+                if (this.obstacleUpdateSpreadFrames && !(isBear || isBird)) {
+                    const bucketKey = Math.abs(Math.floor(obstaclePos.y || 0));
+                    if ((bucketKey % this.obstacleUpdateSpreadFrames) !== (this._obstacleUpdateCursor % this.obstacleUpdateSpreadFrames)) {
+                        continue;
+                    }
+                }
+
                 // Don't update stuff that's way off screen
                 const inView = obstaclePos.y >= viewTop && obstaclePos.y <= viewBottom;
-                let obstacleContainerForVisibility = (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net || obstacle instanceof Stone) ?
-                    obstacle.getContainer() :
-                    obstacle;
-                if (obstacleContainerForVisibility && obstacleContainerForVisibility.visible !== undefined) {
-                    obstacleContainerForVisibility.visible = inView;
-                }
                 // On mobile, cull even more aggressively
-                if (!inView && (!this.mobileMode || !(obstacle instanceof Bear && obstacle.alwaysChase))) {
+                if (!inView && (!this.mobileMode || !(isBear && obstacle.alwaysChase))) {
                     continue;
                 }
 
                 // Update only if in view or alwaysChase
-                if (obstacle instanceof Bear) {
+                if (isBear) {
                     const needsUpdate = !obstacle.container.visible || inView || obstacle.alwaysChase;
                     if (needsUpdate) {
                         obstacle.update(this.riverBanks, this.gameState, inView || obstacle.alwaysChase, playerPos, actualDelta);
                     }
-                } else if (obstacle instanceof Bird) {
+                } else if (isBird) {
                     obstacle.update(this.config.width, inView, actualDelta);
-                } else if (obstacle instanceof Net) {
+                } else if (isNet) {
                     obstacle.update(this.config.width, inView);
-                } else if (obstacle instanceof Stone) {
+                } else if (isStone) {
                     if (typeof obstacle.update === 'function') obstacle.update();
                     // Spawn foam at a time-based rate so skipping frames doesn't slow emissions
                     this._stoneFoamEmitAccumulator = (this._stoneFoamEmitAccumulator || 0) + frameDelta;
@@ -1122,14 +1339,19 @@ class Game {
                     obstacle.x += obstacle.velocityX;
                 }
 
-                if (!(obstacle instanceof Bear) && !(obstacle instanceof Bird) && !(obstacle instanceof Net) &&
-                    (obstacle.x < 0 || obstacle.x > this.config.width)) {
+                if (!isBear && !isBird && !isNet && (obstacle.x < 0 || obstacle.x > this.config.width)) {
                     obstacle.velocityX *= -1;
                 }
 
-                const obstacleContainer = (obstacle instanceof Bear || obstacle instanceof Bird || obstacle instanceof Net || obstacle instanceof Stone) ?
-                    obstacle.getContainer() :
-                    obstacle;
+                // Cache obstacle container reference for visibility and collision checks
+                let obstacleContainer = obstacle._cachedContainer;
+                if (!obstacleContainer) {
+                    obstacleContainer = (obstacle && typeof obstacle.getContainer === 'function') ? obstacle.getContainer() : obstacle;
+                    if (this._obstacleContainerCacheEnabled) obstacle._cachedContainer = obstacleContainer;
+                }
+                if (obstacleContainer && obstacleContainer.visible !== undefined) {
+                    obstacleContainer.visible = inView;
+                }
 
                 if (window.Player && window.Player.getPosition && window.Player.setInvincible && this.player.isInvincible) {
                     continue;
@@ -1144,19 +1366,19 @@ class Game {
                     continue;
                 }
                 if ((this.gameState.romanticSceneActive)
-                    && (obstacle.type === 'waterfall' || obstacle instanceof Bear)) {
+                    && (obstacle.type === 'waterfall' || isBear)) {
                     continue;
                 }
 
                 let collided = false;
-                if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
+                if ((isStone) && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
                     continue;
                 }
-                if (obstacle instanceof Stone) {
+                if (isStone) {
                     if (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward')) {
                         continue;
                     }
-                    const playerBox = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
+                    const playerBox = playerBoxFrame || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const stoneBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                     if (
                         playerBox.x < stoneBox.x + stoneBox.width &&
@@ -1169,8 +1391,8 @@ class Game {
                         const overlapTop = (playerBox.y + playerBox.height) - stoneBox.y;
                         const overlapBottom = (stoneBox.y + stoneBox.height) - playerBox.y;
                         const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-                        let newX = window.Player.getContainer(this.player).x;
-                        let newY = window.Player.getContainer(this.player).y;
+                        let newX = playerContainer ? playerContainer.x : playerPos.x;
+                        let newY = playerContainer ? playerContainer.y : playerPos.y;
                         if (minOverlap === overlapLeft) {
                             newX -= overlapLeft;
                         } else if (minOverlap === overlapRight) {
@@ -1192,15 +1414,15 @@ class Game {
                                 }, 100);
                             }
                             this.gameState.health = Math.max(0, this.gameState.health - (obstacle.damage || 20));
-                            this.river.createSplash(window.Player.getContainer(this.player).x, window.Player.getContainer(this.player).y, {});
+                            this.river.createSplash(newX, newY, {});
                         }
                         continue;
                     }
-                } else if (obstacle.hitRadius && !(obstacle instanceof Bird)) {
+                } else if (obstacle.hitRadius && !(isBird)) {
                     if (this.checkCollision && this.checkCollision(this.player.getContainer(), obstacleContainer, obstacle.hitRadius)) {
                         collided = true;
                     }
-                } else if (obstacle instanceof Bear || obstacle instanceof Bird) {
+                } else if (isBear || isBird) {
                     const playerBoxDbg = window.Player.getHitbox(this.player) || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                     const obsBoxDbg = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                     const playerBox = playerBoxDbg;
@@ -1239,11 +1461,11 @@ class Game {
                 }
 
                 if (collided) {
-                    if ((obstacle instanceof Stone || obstacle.type === 'stone' || obstacle.type === 'rock') && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
+                    if ((isStone) && (this.player.isJumping || (this.gameState.isDashing && this.gameState.dashDirection === 'forward'))) {
                         continue;
                     }
-                    if (obstacle instanceof Stone) {
-                        const playerBox = this.player.getHitbox ? this.player.getHitbox() : { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
+                    if (isStone) {
+                        const playerBox = playerBoxFrame || { x: playerPos.x - 32, y: playerPos.y - 32, width: 64, height: 64 };
                         const obsBox = obstacle.getHitbox ? obstacle.getHitbox() : (obstacleContainer && obstacleContainer.x !== undefined && obstacleContainer.y !== undefined ? { x: obstacleContainer.x - 32, y: obstacleContainer.y - 32, width: 64, height: 64 } : null);
                         const px = playerBox.x + playerBox.width / 2;
                         const py = playerBox.y + playerBox.height / 2;
@@ -1273,10 +1495,11 @@ class Game {
                         this.gameState.health = Math.max(0, this.gameState.health - (obstacle.damage || 20));
                         this.river.createSplash(playerPos.x, playerPos.y, {});
                         this.world.removeChild(obstacleContainer);
-                        this.obstacles.splice(i, 1);
+                        const _idx = this.obstacles.indexOf(obstacle);
+                        if (_idx !== -1) { obstacle._removed = true; this.obstacles.splice(_idx, 1); }
                         continue;
                     } else {
-                        if (obstacle instanceof Bird && this.gameState.romanticSceneActive) {
+                        if (isBird && this.gameState.romanticSceneActive) {
                             continue;
                         }
                         window.Player.takeDamage(this.player, obstacle.damage, this.gameState);
@@ -1297,20 +1520,23 @@ class Game {
                     }
                 }
 
-                if (obstacle instanceof Bird && obstaclePos.y < playerPos.y - (this.config.height / 2) - 40) {
+                if (isBird && obstaclePos.y < playerPos.y - (this.config.height / 2) - 40) {
                     this.world.removeChild(obstacleContainer);
-                    this.obstacles.splice(i, 1);
+                    const _idx2 = this.obstacles.indexOf(obstacle);
+                    if (_idx2 !== -1) { obstacle._removed = true; this.obstacles.splice(_idx2, 1); }
                     this.gameState.birdCount--;
                     this.gameState.score += 10;
-                } else if (obstacle instanceof Bear && obstaclePos.y > playerPos.y + (this.config.height / 2) + 40) {
+                } else if (isBear && obstaclePos.y > playerPos.y + (this.config.height / 2) + 40) {
                     this.world.removeChild(obstacleContainer);
-                    this.obstacles.splice(i, 1);
+                    const _idx3 = this.obstacles.indexOf(obstacle);
+                    if (_idx3 !== -1) { obstacle._removed = true; this.obstacles.splice(_idx3, 1); }
                     this.gameState.bearCount--;
                     this.gameState.score += 10;
                 }
             }
             // Advance rotating cursor so different obstacle indices are processed next frame
             this._obstacleUpdateCursor = (this._obstacleUpdateCursor + 1) % Math.max(1, this.obstacleUpdateSpreadFrames || 1);
+            obstaclesTime = this._frameProfilerEnabled ? (performance.now() - obstStart) : 0;
         }
 
         const goal = this.world.getChildByLabel('goal');
@@ -1331,21 +1557,64 @@ class Game {
             }
         }
 
-        this.updateUI();
+        let hudTime = 0;
+        if (this._frameProfilerEnabled) {
+            const hudStart = performance.now();
+            this.updateUI();
+            hudTime = performance.now() - hudStart;
+        } else {
+            this.updateUI();
+        }
 
+        let particleTime = 0;
         if (this.particleManager) {
+            const partStart = this._frameProfilerEnabled ? performance.now() : 0;
             // Accumulate delta so skipped frames still progress particle animations
             this._particleUpdateAccumulator = (this._particleUpdateAccumulator || 0) + frameDelta;
             const skipFrames = (this._particleUpdateSkipFrames || 1);
             if (this._particleUpdateAccumulator >= skipFrames) {
-                const acc = this._particleUpdateAccumulator;
+                // Cap accumulated work to avoid a very long particle update call
+                const cap = Math.max(1, Math.round(skipFrames * 2));
+                const acc = Math.min(this._particleUpdateAccumulator, cap);
+
+                // If particle manager supports emission throttling, reduce emissions under adaptive mode
+                try {
+                    if (this._adaptiveMode && typeof this.particleManager.setEmissionMultiplier === 'function') {
+                        this.particleManager.setEmissionMultiplier(0.5);
+                    } else if (!this._adaptiveMode && typeof this.particleManager.setEmissionMultiplier === 'function') {
+                        this.particleManager.setEmissionMultiplier(1.0);
+                    }
+                } catch (e) {}
+
                 if (this.gameState.won) {
-                            this.particleManager.updateWinHearts(acc);
+                    this.particleManager.updateWinHearts(acc);
                 } else {
-                            this.particleManager.updateParticles(acc);
+                    this.particleManager.updateParticles(acc);
                 }
                 this.particleManager.updateFoam(acc);
                 this._particleUpdateAccumulator = 0;
+            }
+            particleTime = this._frameProfilerEnabled ? (performance.now() - partStart) : 0;
+        }
+
+        // Frame profiling: compute totals and EMAs, warn on slow frames
+        if (this._frameProfilerEnabled) {
+            const frameTime = performance.now() - (typeof obstStart !== 'undefined' ? obstStart : performance.now());
+            const updateEMA = (key, val) => {
+                if (!this._perfSectionEMA[key]) this._perfSectionEMA[key] = val;
+                else this._perfSectionEMA[key] = (1 - this._perfEMAAlpha) * this._perfSectionEMA[key] + this._perfEMAAlpha * val;
+            };
+            updateEMA('obstacles', obstaclesTime || 0);
+            updateEMA('particles', particleTime || 0);
+            updateEMA('hud', hudTime || 0);
+            updateEMA('frame', frameTime || 0);
+            if ((frameTime || 0) > this._frameProfilerThreshold) {
+                console.warn('Slow frame', Math.round(frameTime) + 'ms', {
+                    frameEMA: Math.round(this._perfSectionEMA.frame) + 'ms',
+                    obstacles: Math.round(this._perfSectionEMA.obstacles) + 'ms',
+                    particles: Math.round(this._perfSectionEMA.particles) + 'ms',
+                    hud: Math.round(this._perfSectionEMA.hud) + 'ms'
+                });
             }
         }
 
@@ -1356,7 +1625,12 @@ class Game {
 
     updateUI() {
         if (hud) {
-            hud.update(this.gameState.health, this.gameState.distance);
+            // Only update HUD when values actually change to avoid unnecessary work
+            if (this._lastHudHealth !== this.gameState.health || this._lastHudDistance !== this.gameState.distance) {
+                hud.update(this.gameState.health, this.gameState.distance);
+                this._lastHudHealth = this.gameState.health;
+                this._lastHudDistance = this.gameState.distance;
+            }
         }
     }
 
@@ -1395,6 +1669,7 @@ class Game {
                 const obs = this.obstacles[i];
                 if (obs.type === 'bird' || obs.type === 'bear') {
                     obs.destroy();
+                    if (obs) obs._removed = true;
                     this.obstacles.splice(i, 1);
                 }
             }
@@ -1423,6 +1698,7 @@ class Game {
             const obs = this.obstacles[i];
             if (obs.type === 'bird' || obs.type === 'bear') {
                 obs.destroy();
+                if (obs) obs._removed = true;
                 this.obstacles.splice(i, 1);
             }
         }
