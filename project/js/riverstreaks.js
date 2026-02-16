@@ -1,12 +1,14 @@
 class RiverStreaks {
-    static FPS = 15; // Animation FPS for river streaks
-    static DT = 60 / RiverStreaks.FPS;
-    
     constructor(world, config, getRiverPathCallback) {
         this.world = world;
         this.config = config;
         this.getRiverPath = getRiverPathCallback;
         this.streaksContainer = null;
+        // Use full visual fidelity by default; adaptive mode may still reduce work elsewhere
+        this.isAdaptive = (window.game && window.game._adaptiveMode) || false;
+        this.fps = 15;
+        this.DT = 60 / this.fps;
+        this.streakCount = 8;
         this.init();
     }
     
@@ -20,7 +22,7 @@ class RiverStreaks {
         waterLayer1.addChild(this.streaksContainer);
         
         // Add streaks that follow the river's path
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < this.streakCount; i++) {
             const streak = new PIXI.Graphics();
             streak.label = `streak${i}`;
             
@@ -28,8 +30,8 @@ class RiverStreaks {
             // This spreads them out so they don't all start at the same Y
             streak.startY = -this.config.height - (i * 100) - Math.random() * 2000;
             streak.xOffset = (Math.random() - 0.5) * 300; // Offset from river center
-            streak.speed = 8 + Math.random() * 8; // Speed: 8-16 pixels per frame
-            streak.opacity = 0.2 + Math.random() * 0.4; // Opacity between 0.2 and 0.6
+            streak.speed = this.isAdaptive ? (6 + Math.random() * 6) : (8 + Math.random() * 8);
+            streak.opacity = this.isAdaptive ? (0.15 + Math.random() * 0.25) : (0.2 + Math.random() * 0.4);
             
             this.streaksContainer.addChild(streak);
         }
@@ -37,11 +39,11 @@ class RiverStreaks {
     
     update(playerPos) {
         if (!this.streaksContainer) return;
-        // Limit update rate to RiverStreaks.FPS
+        // Limit update rate to configured FPS
         const now = performance.now();
         if (!this.lastUpdateTime) this.lastUpdateTime = 0;
-        if (now - this.lastUpdateTime < 1000 / RiverStreaks.FPS) return;
-        const dt = RiverStreaks.DT;
+        if (now - this.lastUpdateTime < 1000 / this.fps) return;
+        const dt = this.DT;
         this.lastUpdateTime = now;
         const viewTop = playerPos.y - this.config.height / 2 - 200;
         const viewBottom = playerPos.y + this.config.height / 2 + 200;
@@ -64,47 +66,30 @@ class RiverStreaks {
                 return;
             }
             
-            // Draw curved streak
+            // Draw streak polyline at full fidelity
             streak.clear();
             const points = 6;
-            const streakLength = 150; // Length of each streak segment
-            
-            // Begin drawing the streak
+            const streakLength = 120;
             const curvePoints = [];
-            
-            // Collect all points for the curve
             for (let i = 0; i <= points; i++) {
                 const t = i / points;
                 const y = streak.startY + t * streakLength;
-                
-                // Get river path from the cache
                 const pathData = this.getRiverPath(y);
                 const x = this.config.width / 2 + pathData.curve + streak.xOffset;
-                
                 curvePoints.push({ x, y });
             }
-            
-            // Use quadratic curves for smooth lines
             if (curvePoints.length > 0) {
                 streak.moveTo(curvePoints[0].x, curvePoints[0].y);
-                
-                for (let i = 1; i < curvePoints.length - 1; i++) {
-                    const xc = (curvePoints[i].x + curvePoints[i + 1].x) / 2;
-                    const yc = (curvePoints[i].y + curvePoints[i + 1].y) / 2;
-                    streak.quadraticCurveTo(curvePoints[i].x, curvePoints[i].y, xc, yc);
+                for (let i = 1; i < curvePoints.length; i++) {
+                    streak.lineTo(curvePoints[i].x, curvePoints[i].y);
                 }
-                
-                // Draw the final segment
-                const last = curvePoints[curvePoints.length - 1];
-                const secondLast = curvePoints[curvePoints.length - 2];
-                streak.quadraticCurveTo(secondLast.x, secondLast.y, last.x, last.y);
             }
             
             // Draw the streak with a fading effect
             const fadeAlpha = streak.opacity * 0.75;
             if (fadeAlpha > 0.01) {
                 streak.stroke({ 
-                    width: 3, 
+                    width: this.isAdaptive ? 2 : 3, 
                     color: 0xffffff, 
                     alpha: fadeAlpha,
                     cap: 'round',

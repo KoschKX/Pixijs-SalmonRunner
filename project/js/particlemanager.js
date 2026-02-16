@@ -1,11 +1,11 @@
 class ParticleManager {
     static getMaxParticles() {
-        if (window.game && window.game.mobileMode) return 25; // Reduced from 40
+        if (window.game && window.game._adaptiveMode) return 20; // Lower under adaptive mode
         return 100;
     }
 
     static getMaxFoam() {
-        if (window.game && window.game.mobileMode) return 10; // Reduced from 16
+        if (window.game && window.game._adaptiveMode) return 8; // Lower under adaptive mode
         return 32;
     }
     
@@ -93,8 +93,10 @@ class ParticleManager {
 
     static textures = {};
     static lastSummaryLog = 0;
-    static FPS = 30;
-    static DT = 45 / ParticleManager.FPS;
+    // Use 1:1 delta units: `deltaTime` passed from the game loop represents frame-multiples.
+    // Keep DT = 1 so velocities and timers progress linearly with accumulated frame delta.
+    static FPS = 60;
+    static DT = 1;
 
     /**
      * Create expanding circle wave sprites for stone effects.
@@ -260,6 +262,7 @@ class ParticleManager {
         this.world.addChild(this.pixiParticleContainer);
         this.pixiParticleContainer.x = 0;
         this.pixiParticleContainer.y = 0;
+        // No mobile-specific particle behavior; retain adaptive-mode checks only
     }
     addFoam(foam) {
         if (this.foam.length >= ParticleManager.getMaxFoam()) {
@@ -446,20 +449,30 @@ class ParticleManager {
     }
 
     updateWinHearts(deltaTime = 1) {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            if (p.initialLife && p.vx !== undefined) {
-                p.x += p.vx * deltaTime;
-                p.y += p.vy * deltaTime;
-                p.life -= deltaTime;
-                const progress = 1 - (p.life / p.initialLife);
-                p.scale.set(0.5 + progress * 2);
-                p.alpha = p.life / p.initialLife;
-                if (p.life <= 0) {
-                    this.world.removeChild(p);
-                    this.particles.splice(i, 1);
+        // Slow down hearts' per-step motion but increase their internal update frequency
+        // by subdividing incoming delta into smaller steps for smoother animation.
+        const speedMultiplier = 0.6; // overall slower movement
+        const stepTick = 0.5; // subdivide into two steps per incoming tick (higher effective frame-rate)
+        let remaining = deltaTime;
+        while (remaining > 0) {
+            const step = Math.min(stepTick, remaining);
+            const dt = step * speedMultiplier;
+            for (let i = this.particles.length - 1; i >= 0; i--) {
+                const p = this.particles[i];
+                if (p.initialLife && p.vx !== undefined) {
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= dt;
+                    const progress = 1 - (p.life / p.initialLife);
+                    p.scale.set(0.5 + progress * 2);
+                    p.alpha = Math.max(0, p.life / p.initialLife);
+                    if (p.life <= 0) {
+                        this.world.removeChild(p);
+                        this.particles.splice(i, 1);
+                    }
                 }
             }
+            remaining -= step;
         }
     }
 
@@ -503,7 +516,7 @@ class ParticleManager {
     }
 
     emitWaterfall(x, y, options = {}) {
-        const count = options.count || (window.game && window.game.mobileMode ? 12 : 24);
+        const count = options.count || ((window.game && window.game._adaptiveMode) ? 12 : 24);
         const minSize = options.minSize || 4;
         const maxSize = options.maxSize || 8;
         const minSpeed = options.minSpeed || 6;
@@ -624,7 +637,7 @@ class ParticleManager {
         }
         
         // Update particles in batches to reduce load
-        const batchSize = this.mobileMode ? 10 : 20;
+        const batchSize = 20;
         const startIdx = (Date.now() % this.particles.length);
         const endIdx = Math.min(startIdx + batchSize, this.particles.length);
         

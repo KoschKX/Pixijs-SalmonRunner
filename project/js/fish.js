@@ -22,9 +22,9 @@ class Fish extends Sprite {
         this.velocityY = 0;
         this.swimTime = 0;
         this.targetRotation = 0; // For smooth turning
-        // Invincibility state
+        // Invincibility state (remaining ms)
         this.isInvincible = false;
-        this.invincibilityEndTime = 0;
+        this.invincibilityRemaining = 0;
         this.flickerTimer = 0;
         // Wake trail behind the fish
         this.wakeHistory = [];
@@ -144,14 +144,15 @@ class Fish extends Sprite {
 
         // Flicker and auto-clear invincibility if set by damage (not dash)
         // Never clear invincibility if dash is active (invincibilityEndTime should be 0 during dash)
-        if (this.isInvincible && this.invincibilityEndTime > 0 && !(window.game && window.game.gameState && window.game.gameState.isDashing)) {
-            const now = Date.now();
-            if (now >= this.invincibilityEndTime) {
+        if (this.isInvincible && this.invincibilityRemaining > 0 && !(window.game && window.game.gameState && window.game.gameState.isDashing)) {
+            // Decrement remaining invincibility by one frame (~16.67ms)
+            this.invincibilityRemaining -= 1000/60;
+            if (this.invincibilityRemaining <= 0) {
                 this.isInvincible = false;
                 this.alpha = 1; // Ensure fully visible
             } else {
                 this.flickerTimer += 1;
-                if (this.flickerTimer % 3 === 0) { // Flicker at 20 toggles per second
+                if (this.flickerTimer % 3 === 0) {
                     this.alpha = this.alpha === 1 ? 0.3 : 1;
                 }
             }
@@ -239,7 +240,7 @@ class Fish extends Sprite {
         // Only activate invincibility and flicker if not already invincible (not dashing)
         if (!this.isInvincible) {
             this.isInvincible = true;
-            this.invincibilityEndTime = Date.now() + 1000;
+            this.invincibilityRemaining = 1000;
             this.flickerTimer = 0;
             // Flash player red for damage
             this.setTint(0xff0000);

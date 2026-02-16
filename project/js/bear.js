@@ -21,7 +21,8 @@ class Bear extends Sprite {
         this.bankX = 0; // Set later to the bank's X position
         this.velocityY = 0; // Moves with the screen vertically
         this.velocityX = 0; // Bear doesn't move horizontally by default
-        this.walkSpeed = 1.5; // Bear's normal walking speed
+        // Increase bear speeds so they feel responsive
+        this.walkSpeed = 1.845703125; // Bear's normal walking speed (increased 25%)
         this.targetX = 0; // Where the bear wants to walk
         this.isWalking = false; // True if bear is moving
         this.isEating = false; // True if bear is eating
@@ -68,7 +69,7 @@ class Bear extends Sprite {
         this.switchAnimation('eat', 0.1);
     }
     
-    update(riverBanks, config, inView = true, playerPos = null) { 
+    update(riverBanks, config, inView = true, playerPos = null, delta = 1) { 
         // Skip expensive updates for off-screen bears
         if (!inView && !this.alwaysChase) {
             return;
@@ -122,12 +123,12 @@ class Bear extends Sprite {
         if (this.isEating) {
             // If alwaysChase is set, stop eating and start chasing
             if (!this.alwaysChase) {
-                this.eatTimer++;
+                this.eatTimer += delta;
                 if (this.eatTimer >= this.eatDuration) {
                     // Finished eating, now wait before next move
                     this.isEating = false;
                     this.eatTimer = 0;
-                    this.idleTimer = Math.random() * 60 + 30; // Wait a bit before next action
+                    this.idleTimer = Math.random() * 60 + 30; // Wait a bit before next action (in frame-units)
                 } else {
                     this.switchAnimation('eat');
                         return; // Don't do anything else while eating
@@ -139,7 +140,7 @@ class Bear extends Sprite {
         if (this.idleTimer > 0) {
             // If alwaysChase is set, stop waiting and chase
             if (!this.alwaysChase) {
-                this.idleTimer--;
+                this.idleTimer -= delta;
                 this.switchAnimation('eat');
                 return;
             }
@@ -149,14 +150,14 @@ class Bear extends Sprite {
         if (playerPos && (Math.abs(playerPos.y - this.y) < 800 || this.alwaysChase)) {
             // Move faster and animate quicker when chasing for real
             if (this.alwaysChase) {
-                this.walkSpeed = 6.0; // Much faster speed when chasing
+                this.walkSpeed = 7.5; // Much faster speed when chasing (increased 25%)
                 if (this.sprite && this.currentAnimation === 'walk') {
-                    this.sprite.animationSpeed = 0.5;
+                    this.sprite.animationSpeed = 0.6;
                 }
             } else {
-                this.walkSpeed = 1.5; // Normal speed
+                this.walkSpeed = 1.845703125; // Normal speed (increased 25%)
                 if (this.sprite && this.currentAnimation === 'walk') {
-                    this.sprite.animationSpeed = 0.15;
+                    this.sprite.animationSpeed = 0.25;
                 }
             }
             // Head straight for the player (ignoring banks)
@@ -185,8 +186,8 @@ class Bear extends Sprite {
                 this.isWalking = true;
                 this.switchAnimation('walk');
 
-                const moveX = (distanceX / totalDistance) * this.walkSpeed;
-                const moveY = (distanceY / totalDistance) * this.walkSpeed;
+                const moveX = (distanceX / totalDistance) * this.walkSpeed * delta;
+                const moveY = (distanceY / totalDistance) * this.walkSpeed * delta;
 
                 this.x += moveX;
                 this.y += moveY;

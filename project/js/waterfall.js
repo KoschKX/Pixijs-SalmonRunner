@@ -1,6 +1,7 @@
 class Waterfall {
     static FPS = 30; // Set your preferred frames per second
-    static DT = 90 / Waterfall.FPS;
+    // Use 1:1 frame-tick units so incoming deltas from the game map directly
+    static DT = 1;
     
     constructor(config, boundaries = { left: 150, right: 650, width: 450 }, getBoundariesAtY = null) {
         this.config = config;
@@ -79,7 +80,7 @@ class Waterfall {
         displacementSprite.scale.set(width / dispWidth, height / dispHeight);
         displacementSprite.visible = false;
         
-        const filterScale = (window.game && window.game.mobileMode) ? 10 : 15;
+        const filterScale = 15;
         const displacementFilter = new PIXI.DisplacementFilter({
             sprite: displacementSprite,
             scale: filterScale
@@ -145,7 +146,8 @@ class Waterfall {
         foamCanvas.height = 50;
         const foamCtx = foamCanvas.getContext('2d');
         
-        const streakCount = 80 + Math.random() * 40; // Randomize number of foam streaks
+        const isAdaptive = (window.game && window.game._adaptiveMode) || false;
+        const streakCount = isAdaptive ? (20 + Math.random() * 10) : (80 + Math.random() * 40);
         
         for (let i = 0; i < streakCount; i++) {
             const x = Math.random() * width;
@@ -228,7 +230,8 @@ class Waterfall {
         // Splash particles at the bottom
         const foamIndices = [0, 1, 2, 3, 4, 6, 8];
         const splashParticles = [];
-        const particleCount = (window.game && window.game.mobileMode) ? 30 : 60;
+        const isAdaptive = (window.game && window.game._adaptiveMode) || false;
+        const particleCount = isAdaptive ? 12 : 60;
         for (let i = 0; i < particleCount; i++) {
             // Choose a random foam texture
             const foamIdx = foamIndices[Math.floor(Math.random() * foamIndices.length)];
@@ -368,13 +371,20 @@ class Waterfall {
         }
     }
     
-    update() {
-        // Only update at the set FPS
-        const now = performance.now();
-        if (!this.lastUpdateTime) this.lastUpdateTime = 0;
-        if (now - this.lastUpdateTime < 1000 / Waterfall.FPS) return;
-        const dt = Waterfall.DT;
-        this.lastUpdateTime = now;
+    update(delta) {
+        // If a frame-based delta is passed (from `game` accumulator), use it so
+        // skipped frames advance animation by the elapsed time. Otherwise,
+        // fall back to time-based gating at Waterfall.FPS.
+        let dt;
+        if (typeof delta === 'number') {
+            dt = delta * Waterfall.DT;
+        } else {
+            const now = performance.now();
+            if (!this.lastUpdateTime) this.lastUpdateTime = 0;
+            if (now - this.lastUpdateTime < 1000 / Waterfall.FPS) return;
+            dt = Waterfall.DT;
+            this.lastUpdateTime = now;
+        }
         
         // Move foam to the right Y position first
         const foamY = this.container.y + this.container.waterfallHeight;
@@ -456,12 +466,15 @@ class Waterfall {
             });
         }
         // Animate the water texture and displacement for a flowing look
+        // Scale waterfall animations up under adaptive mode so they remain snappy
+        const speedScale = (window.game && window.game._adaptiveMode) ? 1.6 : 1;
+        const animDt = dt * speedScale;
         if (this.container.textureSprite) {
-            this.container.animationOffset += 4 * dt / 2;
+            this.container.animationOffset += 4 * animDt / 2;
             this.container.textureSprite.tilePosition.y = this.container.animationOffset;
         }
         if (this.container.displacementSprite) {
-            this.container.displacementSprite.y += 2 * dt / 2;
+            this.container.displacementSprite.y += 2 * animDt / 2;
         }
         // Animate small ripples on the waterfall (sprites)
         if (this.container.ripples) {
@@ -545,7 +558,7 @@ class Waterfall {
         if (this.container.foamMist) {
             this.container.mistTime += 0.1 * dt;
             this.container.foamMist.clear();
-            const mistParticles = (window.game && window.game.mobileMode) ? 6 : 10;
+            const mistParticles = (window.game && window.game._adaptiveMode) ? 6 : 10;
             for (let i = 0; i < mistParticles; i++) {
                 const x = this.riverLeft + Math.random() * this.riverWidth;
                 const y = Math.random() * 20 - 10;

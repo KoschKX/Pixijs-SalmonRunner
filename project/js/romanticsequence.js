@@ -29,10 +29,13 @@ window.RomanticSequence = class RomanticSequence {
 			}
 		}
 
-		// Stop spawning new enemies
+		// Stop spawning new enemies (clear interval or ticker-driven timer)
 		if (this.game.spawnInterval) {
 			clearInterval(this.game.spawnInterval);
 			this.game.spawnInterval = null;
+		}
+		if (this.game.spawnTimer !== null) {
+			this.game.spawnTimer = null;
 		}
 
 		// Bring player and goal fish above fade overlay

@@ -4,7 +4,9 @@ window.Player.updatePlayerState = function(game, delta) {
     if (game.camera && game.player) {
         const cameraX = game.config.width / 2;
         game.camera.setTarget(cameraX, playerPos.y);
-        game.camera.update(delta.deltaTime);
+        // Delta passed here is frame-units (1 == one 60fps frame); accept numeric delta directly
+        const frameDelta = (typeof delta === 'number') ? delta : (delta && delta.delta ? delta.delta : 1);
+        game.camera.update(frameDelta);
     }
     game.frameCounter++;
     if (!game.gameState.won) {
@@ -22,19 +24,18 @@ window.Player.updatePlayerState = function(game, delta) {
                 dashKeyHeld = game.input.keys['ArrowDown'] || game.input.keys['s'] || game.input.keys['S'];
             }
             if (!dashKeyHeld && !game.gameState.dashShortened) {
-                const nowTime = Date.now();
-                const remaining = game.gameState.dashEndTime - nowTime;
+                const remaining = game.gameState.dashRemaining || 0;
                 if (remaining > 30) {
-                    game.gameState.dashEndTime = nowTime + Math.floor(remaining * 0.4);
+                    game.gameState.dashRemaining = Math.floor(remaining * 0.4);
                     game.gameState.dashShortened = true;
                 }
             }
-            if (now >= game.gameState.dashEndTime) {
+            if ((game.gameState.dashRemaining || 0) <= 0) {
                 game.gameState.isDashing = false;
                 game.gameState.dashShortened = false;
                 if (game.player) {
                     game.player.isInvincible = false;
-                    game.player.invincibilityEndTime = 0;
+                    game.player.invincibilityRemaining = 0;
                 }
                 if (game.gameState.dashDirection === 'forward' && game.player && game.player.mesh) {
                     game.player.mesh.scale.set(game.player.meshScale);
@@ -71,24 +72,24 @@ window.Player.updatePlayerState = function(game, delta) {
                 game.gameState.bounceDuration = null;
                 game.gameState.bouncePause = null;
                 game.gameState.bounceInitialVelocityY = null;
-                if (dashDir === 'forward' && now - game.gameState.lastDashTime >= game.config.dashCooldown) {
+                if (dashDir === 'forward' && game.gameState.lastDashSince >= game.config.dashCooldown) {
                     game.gameState.isDashing = true;
                     game.gameState.dashDirection = 'forward';
-                    game.gameState.dashEndTime = now + game.config.dashDuration;
-                    game.gameState.lastDashTime = now;
+                    game.gameState.dashRemaining = game.config.dashDuration;
+                    game.gameState.lastDashSince = 0;
                     if (game.player) {
                         game.player.isInvincible = true;
-                        game.player.invincibilityEndTime = 0;
+                        game.player.invincibilityRemaining = 0;
                     }
                     game.playRandomSplash();
-                } else if (dashDir === 'backward' && now - game.gameState.lastDashTime >= game.config.backDashCooldown) {
+                } else if (dashDir === 'backward' && game.gameState.lastDashSince >= game.config.backDashCooldown) {
                     game.gameState.isDashing = true;
                     game.gameState.dashDirection = 'backward';
-                    game.gameState.dashEndTime = now + game.config.backDashDuration;
-                    game.gameState.lastDashTime = now;
+                    game.gameState.dashRemaining = game.config.backDashDuration;
+                    game.gameState.lastDashSince = 0;
                     if (game.player) {
                         game.player.isInvincible = true;
-                        game.player.invincibilityEndTime = 0;
+                        game.player.invincibilityRemaining = 0;
                     }
                     game.playRandomSplash();
                 }
@@ -107,33 +108,32 @@ window.Player.updatePlayerState = function(game, delta) {
                 targetVelocityX = game.gameState.playerVelocityX;
                 targetVelocityY = game.gameState.playerVelocityY;
             }
-        } else if (!game.gameState.isDashing && !game.gameState.romanticSceneActive) {
-            const now = Date.now();
-            if ((game.input.keys['ArrowUp'] || game.input.keys['w'] || game.input.keys['W']) && now - game.gameState.lastDashTime >= game.config.dashCooldown) {
-                game.gameState.isDashing = true;
-                game.gameState.dashDirection = 'forward';
-                game.gameState.dashEndTime = now + game.config.dashDuration;
-                game.gameState.lastDashTime = now;
-                if (game.player) {
-                    game.player.isInvincible = true;
-                    game.player.invincibilityEndTime = 0;
+            } else if (!game.gameState.isDashing && !game.gameState.romanticSceneActive) {
+                if ((game.input.keys['ArrowUp'] || game.input.keys['w'] || game.input.keys['W']) && game.gameState.lastDashSince >= game.config.dashCooldown) {
+                    game.gameState.isDashing = true;
+                    game.gameState.dashDirection = 'forward';
+                    game.gameState.dashRemaining = game.config.dashDuration;
+                    game.gameState.lastDashSince = 0;
+                    if (game.player) {
+                        game.player.isInvincible = true;
+                        game.player.invincibilityRemaining = 0;
+                    }
+                    game.playRandomSplash();
+                } else if ((game.input.keys['ArrowDown'] || game.input.keys['s'] || game.input.keys['S']) && game.gameState.lastDashSince >= game.config.backDashCooldown) {
+                    game.gameState.isDashing = true;
+                    game.gameState.dashDirection = 'backward';
+                    game.gameState.dashRemaining = game.config.backDashDuration;
+                    game.gameState.lastDashSince = 0;
+                    if (game.player) {
+                        game.player.isInvincible = true;
+                        game.player.invincibilityRemaining = 0;
+                    }
+                    game.playRandomSplash();
                 }
-                game.playRandomSplash();
-            } else if ((game.input.keys['ArrowDown'] || game.input.keys['s'] || game.input.keys['S']) && now - game.gameState.lastDashTime >= game.config.backDashCooldown) {
-                game.gameState.isDashing = true;
-                game.gameState.dashDirection = 'backward';
-                game.gameState.dashEndTime = now + game.config.backDashDuration;
-                game.gameState.lastDashTime = now;
-                if (game.player) {
-                    game.player.isInvincible = true;
-                    game.player.invincibilityEndTime = 0;
-                }
-                game.playRandomSplash();
-            }
         } else {
             if (game.gameState.isDashing) {
                 if (game.gameState.dashDirection === 'forward') {
-                    const dashElapsed = (now - (game.gameState.dashEndTime - game.config.dashDuration)) / game.config.dashDuration;
+                    const dashElapsed = ((game.config.dashDuration - (game.gameState.dashRemaining || 0)) / game.config.dashDuration) || 0;
                     let scale = 1;
                     if (dashElapsed < 0.5) {
                         scale = 1 + dashElapsed * 2;
@@ -160,7 +160,7 @@ window.Player.updatePlayerState = function(game, delta) {
                         targetVelocityX = 0;
                     }
                     var backDashAccel = game.config.playerAcceleration * 1.1;
-                    game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * backDashAccel * delta.deltaTime;
+                    game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * backDashAccel * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
                 }
             } else {
                 if (game.gameState.isDashing) {
@@ -190,14 +190,14 @@ window.Player.updatePlayerState = function(game, delta) {
             }
         }
         if (targetVelocityX !== 0) {
-            game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * game.config.playerAcceleration * delta.deltaTime;
+            game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * game.config.playerAcceleration * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
         } else {
-            game.gameState.playerVelocityX *= Math.pow(game.config.playerFriction, delta.deltaTime);
+            game.gameState.playerVelocityX *= Math.pow(game.config.playerFriction, (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0));
         }
         if (targetVelocityY !== 0) {
-            game.gameState.playerVelocityY += (targetVelocityY - game.gameState.playerVelocityY) * game.config.playerAcceleration * delta.deltaTime;
+                game.gameState.playerVelocityY += (targetVelocityY - game.gameState.playerVelocityY) * game.config.playerAcceleration * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
         } else {
-            game.gameState.playerVelocityY *= Math.pow(game.config.playerFriction, delta.deltaTime);
+                game.gameState.playerVelocityY *= Math.pow(game.config.playerFriction, (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0));
         }
         // --- Moderate left/right control during jump ---
         if (game.input.keys['ArrowLeft'] || game.input.keys['a'] || game.input.keys['A']) {
@@ -208,9 +208,9 @@ window.Player.updatePlayerState = function(game, delta) {
             targetVelocityX = 0;
         }
         var jumpAccel = game.config.playerAcceleration * 1.5;
-        game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * jumpAccel * delta.deltaTime;
-        let newX = playerPos.x + game.gameState.playerVelocityX * delta.deltaTime;
-        let newY = playerPos.y + game.gameState.playerVelocityY * delta.deltaTime;
+        game.gameState.playerVelocityX += (targetVelocityX - game.gameState.playerVelocityX) * jumpAccel * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
+        let newX = playerPos.x + game.gameState.playerVelocityX * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
+        let newY = playerPos.y + game.gameState.playerVelocityY * (typeof delta === 'number' ? delta : (delta && delta.deltaTime) || 0);
         if (game.input.pointerHeld && typeof game.input.pointerX === 'number') {
             if ((game.gameState.playerVelocityX > 0 && newX > game.input.pointerX && playerPos.x <= game.input.pointerX) ||
                 (game.gameState.playerVelocityX < 0 && newX < game.input.pointerX && playerPos.x >= game.input.pointerX)) {
@@ -240,7 +240,7 @@ window.Player.setInvincible = function(player, value) {
     if (player) player.isInvincible = value;
 };
 window.Player.setInvincibilityEndTime = function(player, value) {
-    if (player) player.invincibilityEndTime = value;
+    if (player) player.invincibilityRemaining = value;
 };
 window.Player.create = function(x, y, config) {
     return new Fish(x, y, config);

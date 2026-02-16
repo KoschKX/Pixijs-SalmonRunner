@@ -35,8 +35,9 @@ class Bird extends Sprite {
             this.speedMultiplier = 0.8;
         }
         this.type = 'bird';
-        this.velocityY = 0;
-        this.velocityX = (Math.random() - 0.5) * 3 * this.speedMultiplier * (0.7 + Math.random() * 0.6);
+        // Base velocities (in pixels per frame-unit); increase to make birds more lively
+        this.velocityY = (0.5 + Math.random() * 1.0) * this.speedMultiplier * 1.2;
+        this.velocityX = (Math.random() - 0.5) * 6 * this.speedMultiplier * (0.9 + Math.random() * 0.6);
         this.currentAnimation = 'flap';
         this.animationTimer = 0;
         this.flapDuration = 60;
@@ -82,16 +83,16 @@ class Bird extends Sprite {
         }
     }
 
-    update(screenWidth, inView = true) {
+    update(screenWidth, inView = true, delta = 1) {
         // Skip updates for off-screen birds
         if (!inView) {
             return;
         }
-        
+
         super.update(inView);
-        // Move bird and handle screen edge collisions
-        this.y += this.velocityY;
-        this.x += this.velocityX;
+        // Move bird and handle screen edge collisions (scale by delta)
+        this.y += this.velocityY * delta;
+        this.x += this.velocityX * delta;
         if (this.x < 0) {
             this.x = 0;
             this.velocityX *= -1;
@@ -111,8 +112,8 @@ class Bird extends Sprite {
                 return;
             }
         }
-        // Switch between flap and glide animations
-        this.animationTimer++;
+        // Switch between flap and glide animations (advance by delta)
+        this.animationTimer += delta;
         if (this.currentAnimation === 'flap' && this.animationTimer >= this.flapDuration) {
             this.switchAnimation('glide', 0.1);
             this.animationTimer = 0;

@@ -83,6 +83,18 @@ class Game {
 
         this.spawnManager = new window.SpawnManager(this);
         this.frameCounter = 0;
+        // Throttling / spreading config (can be tuned)
+        this.obstacleUpdateSpreadFrames = 3; // spread obstacle work across frames
+        this._obstacleUpdateCursor = 0;
+        this._obstaclesSorted = false;
+        this._particleUpdateSkipFrames = 1.6; // update particles every N frames (1 = every frame). 1.6 = 25% faster than 2.
+        this._particleUpdateCounter = 0;
+        this._particleUpdateAccumulator = 0;
+        // Performance/adaptive throttling
+        this._perfAvg = 1.0; // exponential moving average of delta
+        this._perfAlpha = 0.06; // EMA smoothing
+        this._adaptiveMode = false; // when true, apply stronger throttles
+        this._sortInterval = 30; // obstacle sort interval (can increase under load)
         this.gameLoop = this.gameLoop.bind(this);
     }
 
@@ -202,7 +214,7 @@ class Game {
         goalContainer.label = 'goal';
         goalContainer.zIndex = this.originalGoalZIndex;
 
-        goalContainer.cacheAsBitmap = true;
+        goalContainer.cacheAsTexture = true;
         this.world.addChild(goalContainer);
         
         if (!this.world.sortableChildren) this.world.sortableChildren = true;
@@ -235,14 +247,13 @@ class Game {
     
     async init() {
         
+        // Enable mobile tuning: reduce FPS and resolution on mobile devices
         this.isMobile = isMobileDevice();
-        
-        if (this.isMobile && window.ParticleManager) {
-            window.ParticleManager.getMaxParticles = () => 60;
-            window.ParticleManager.getMaxFoam = () => 24;
-        }
-        
-        const resolution = this.isMobile ? 1 : window.devicePixelRatio || 1;
+        this.mobileMode = this.isMobile;
+        this.obstacleUpdateSpreadFrames = 3;
+        // Run particle updates slightly faster than half frame rate (25% faster)
+        this._particleUpdateSkipFrames = 1.6;
+        const resolution = this.isMobile ? 0.75 : (window.devicePixelRatio || 1);
         
         if (!this.app) {
             this.app = await window.renderer.create({
@@ -250,11 +261,11 @@ class Game {
                 width: this.config.width,
                 height: this.config.height,
                 backgroundColor: this.config.backgroundColor,
-                targetFrameRate: this.isMobile ? 45 : 60,
+                targetFrameRate: 60,
                 antialias: false,
                 resolution: resolution,
-                powerPreference: 'low-power',
-                maxFPS: this.isMobile ? 45 : 60
+                powerPreference: this.isMobile ? 'low-power' : 'default',
+                maxFPS: 60
             });
             
             this.frameTimeLog = false;
@@ -272,7 +283,7 @@ class Game {
                 window.hudManager.addFadeOverlay(this.world, this.config.width, this.config.height);
             }
         }
-        this.setMobileMode();
+        // Mobile mode disabled earlier; no-op
 
         
         await this.preloadResources();
@@ -352,11 +363,11 @@ class Game {
                 width: this.config.width,
                 height: this.config.height,
                 backgroundColor: this.config.backgroundColor,
-                targetFrameRate: this.isMobile ? 45 : 60,
+                targetFrameRate: 60,
                 antialias: false,
-                resolution: this.isMobile ? 0.75 : (window.devicePixelRatio || 1), // Even lower resolution on mobile
+                resolution: this.isMobile ? 0.75 : (window.devicePixelRatio || 1),
                 powerPreference: this.isMobile ? 'low-power' : 'default',
-                maxFPS: this.isMobile ? 45 : 60
+                maxFPS: 60
             });
         }
         this.sceneManager = new SceneManager(this.app);
@@ -403,8 +414,8 @@ class Game {
 
         this.setupControls();
         
-        this.app.ticker.maxFPS = this.mobileMode ? 45 : 60; // Lower FPS target on mobile
-        this.app.ticker.minFPS = this.mobileMode ? 20 : 30;
+        this.app.ticker.maxFPS = 60;
+        this.app.ticker.minFPS = 30;
         this.app.ticker.add(this.gameLoop);
 
         // Don't start spawning until game starts
@@ -633,13 +644,36 @@ class Game {
         const elapsed = now - this.lastFrameTime;
         
         // Adaptive frame rate throttling based on performance
-        const minFrameTime = this.mobileMode ? 22 : 16.67; // 45fps mobile, 60fps desktop
+        // Use a consistent minimum frame time so mobile doesn't slow system updates
+        const minFrameTime = 16.67; // target 60fps timing for update cadence
         if (elapsed < minFrameTime) {
             return;
         }
         this.lastFrameTime = now - (elapsed % minFrameTime); // Carry over remainder
 
-        const actualDelta = delta.deltaTime;
+        // Support both PIXI ticker numeric delta and potential object with deltaTime
+        const actualDelta = (typeof delta === 'number') ? delta : (delta && typeof delta.deltaTime === 'number') ? delta.deltaTime : 1;
+        // Also compute a frame-normalized delta based on wall-clock elapsed (60FPS ticks)
+        const frameDelta = elapsed / (1000 / 60);
+
+        // Update performance EMA and toggle adaptive throttling on sustained high delta
+        this._perfAvg = (1 - this._perfAlpha) * this._perfAvg + this._perfAlpha * actualDelta;
+        const wasAdaptive = this._adaptiveMode;
+        this._adaptiveMode = (this._perfAvg > 1.25);
+        if (this._adaptiveMode !== wasAdaptive) {
+            // Toggle adjustments when entering/exiting adaptive mode
+            if (this._adaptiveMode) {
+                this.obstacleUpdateSpreadFrames = Math.max(this.obstacleUpdateSpreadFrames || 1,4);
+                // Increase particle skip when adaptive to reduce load (scale from baseline)
+                this._particleUpdateSkipFrames = Math.max(this._particleUpdateSkipFrames * 1.5, 2.4);
+                this._sortInterval = 90;
+            } else {
+                // restore defaults tuned in init()
+                this.obstacleUpdateSpreadFrames = 3;
+                this._particleUpdateSkipFrames = 1.6;
+                this._sortInterval = 30;
+            }
+        }
 
         let playerPos = (this.player && typeof this.player.getPosition === 'function') ? this.player.getPosition() : {x: this.config.width/2, y: 0};
         
@@ -945,9 +979,10 @@ class Game {
             }
         }
 
-        const bankSkip = this.mobileMode ? 8 : 4;
-        const waterfallSkip = this.mobileMode ? 6 : 3;
-        const islandSkip = this.mobileMode ? 5 : 3;
+        const adaptMultiplier = this._adaptiveMode ? 2 : 1;
+        const bankSkip = Math.max(1, Math.round(4 * adaptMultiplier));
+        const waterfallSkip = Math.max(1, Math.round(3 * adaptMultiplier));
+        const islandSkip = Math.max(1, Math.round(3 * adaptMultiplier));
 
         if (!this.gameState.won && this.frameCounter % bankSkip === 0) {
             River.updateBanks(this.river, playerPos);
@@ -955,9 +990,13 @@ class Game {
         if (!this.gameState.won && this.frameCounter % 2 === 0) {
             River.updateWaterLayers(this.river, playerPos, this.gameState.scrollOffset);
         }
+        // Accumulate waterfall delta so skipped waterfall updates still progress in time
+        this._waterfallUpdateAccumulator = (this._waterfallUpdateAccumulator || 0) + frameDelta;
         if (!this.gameState.won && this.frameCounter % waterfallSkip === 0) {
             const viewBuffer = this.config.height;
-            River.updateWaterfalls(this.river, playerPos, this.config.height, viewBuffer);
+            // Pass accumulated frame-based delta to the waterfall so its internal motion matches elapsed time
+            River.updateWaterfalls(this.river, playerPos, this.config.height, viewBuffer, this._waterfallUpdateAccumulator);
+            this._waterfallUpdateAccumulator = 0;
         }
         if (!this.gameState.won && this.frameCounter % islandSkip === 0) {
             const viewBuffer = this.config.height;
@@ -965,15 +1004,15 @@ class Game {
         }
 
         if (!this.gameState.won) {
-            const cullMultiplier = this.mobileMode ? 0.5 : 1;
+            const cullMultiplier = 1;
             const viewTop = playerPos.y - this.config.height / 2 - this.config.height * 2 * cullMultiplier;
             const viewBottom = playerPos.y + this.config.height / 2 + this.config.height * cullMultiplier;
 
-            const obstaclesPerFrame = this.mobileMode ? 10 : 20;
+            const obstaclesPerFrame = 20;
             const totalObstacles = this.obstacles.length;
             
-            // Sort by distance to player every 30 frames
-            if (!this._obstaclesSorted || this.frameCounter % 30 === 0) {
+            // Sort by distance to player periodically (interval increases under load)
+            if (!this._obstaclesSorted || this.frameCounter % this._sortInterval === 0) {
                 this.obstacles.sort((a, b) => {
                     const aPos = a._cachedPos || { y: 0 };
                     const bPos = b._cachedPos || { y: 0 };
@@ -984,6 +1023,11 @@ class Game {
 
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obstacle = this.obstacles[i];
+                // Spread obstacle updates across frames to reduce per-frame spikes
+                // Exempt Bears and Birds so they update every frame (keeps their movement responsive)
+                if (this.obstacleUpdateSpreadFrames && !(obstacle instanceof Bear || obstacle instanceof Bird) && ((i % this.obstacleUpdateSpreadFrames) !== (this._obstacleUpdateCursor % this.obstacleUpdateSpreadFrames))) {
+                    continue;
+                }
                 
                 // Cache position lookups
                 let obstaclePos;
@@ -1028,17 +1072,19 @@ class Game {
                 if (obstacle instanceof Bear) {
                     const needsUpdate = !obstacle.container.visible || inView || obstacle.alwaysChase;
                     if (needsUpdate) {
-                        obstacle.update(this.riverBanks, this.gameState, inView || obstacle.alwaysChase, playerPos);
+                        obstacle.update(this.riverBanks, this.gameState, inView || obstacle.alwaysChase, playerPos, actualDelta);
                     }
                 } else if (obstacle instanceof Bird) {
-                    obstacle.update(this.config.width, inView);
+                    obstacle.update(this.config.width, inView, actualDelta);
                 } else if (obstacle instanceof Net) {
                     obstacle.update(this.config.width, inView);
                 } else if (obstacle instanceof Stone) {
                     if (typeof obstacle.update === 'function') obstacle.update();
-                    // Only spawn foam every 3rd frame
-                    if (this.particleManager && this.frameCounter % 3 === 0) {
+                    // Spawn foam at a time-based rate so skipping frames doesn't slow emissions
+                    this._stoneFoamEmitAccumulator = (this._stoneFoamEmitAccumulator || 0) + frameDelta;
+                    if (this.particleManager && this._stoneFoamEmitAccumulator >= 3) {
                         this.particleManager.emitFoamAtStone(obstacle);
+                        this._stoneFoamEmitAccumulator = 0;
                     }
                 } else {
                     obstacle.y += obstacle.velocityY;
@@ -1232,6 +1278,8 @@ class Game {
                     this.gameState.score += 10;
                 }
             }
+            // Advance rotating cursor so different obstacle indices are processed next frame
+            this._obstacleUpdateCursor = (this._obstacleUpdateCursor + 1) % Math.max(1, this.obstacleUpdateSpreadFrames || 1);
         }
 
         const goal = this.world.getChildByLabel('goal');
@@ -1255,12 +1303,19 @@ class Game {
         this.updateUI();
 
         if (this.particleManager) {
-            if (this.gameState.won) {
-                this.particleManager.updateWinHearts(actualDelta);
-            } else {
-                this.particleManager.updateParticles(actualDelta);
+            // Accumulate delta so skipped frames still progress particle animations
+            this._particleUpdateAccumulator = (this._particleUpdateAccumulator || 0) + frameDelta;
+            const skipFrames = (this._particleUpdateSkipFrames || 1);
+            if (this._particleUpdateAccumulator >= skipFrames) {
+                const acc = this._particleUpdateAccumulator;
+                if (this.gameState.won) {
+                            this.particleManager.updateWinHearts(acc);
+                } else {
+                            this.particleManager.updateParticles(acc);
+                }
+                this.particleManager.updateFoam(acc);
+                this._particleUpdateAccumulator = 0;
             }
-            this.particleManager.updateFoam(actualDelta);
         }
 
         if (this.gameState.health <= 0) {

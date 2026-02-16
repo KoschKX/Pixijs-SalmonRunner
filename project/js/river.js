@@ -25,6 +25,8 @@ class River {
         const bankContainer = new PIXI.Container();
         bankContainer.label = 'riverBanks';
         bankContainer.zIndex = 10;
+        // Avoid caching the entire bankContainer (it can be extremely tall and create huge render textures).
+        // Instead cache individual bank segment sprites below after they are created.
         this.world.addChild(bankContainer);
         
         const debugBorderContainer = new PIXI.Container();
@@ -66,12 +68,14 @@ class River {
             leftBank.y = segment.y;
             leftBank.x = this.config.width / 2 - segment.minGap / 2 + segment.leftCurve;
             bankContainer.addChild(leftBank);
+            if (leftBank) leftBank.cacheAsTexture = true;
             segment.leftBank = leftBank;
             
             const rightBank = this.createBankSegment(false);
             rightBank.y = segment.y;
             rightBank.x = this.config.width / 2 + segment.minGap / 2 + segment.rightCurve;
             bankContainer.addChild(rightBank);
+            if (rightBank) rightBank.cacheAsTexture = true;
             segment.rightBank = rightBank;
         }
         
@@ -167,6 +171,7 @@ class River {
         leftBank.y = segment.y;
         leftBank.x = this.config.width / 2 - segment.minGap / 2 + segment.leftCurve;
         bankContainer.addChild(leftBank);
+        if (leftBank) leftBank.cacheAsTexture = true;
         segment.leftBank = leftBank;
         
         // Add right bank
@@ -174,6 +179,7 @@ class River {
         rightBank.y = segment.y;
         rightBank.x = this.config.width / 2 + segment.minGap / 2 + segment.rightCurve;
         bankContainer.addChild(rightBank);
+        if (rightBank) rightBank.cacheAsTexture = true;
         segment.rightBank = rightBank;
         
         // Add debug border lines
@@ -255,12 +261,20 @@ class River {
         displacementSprite.scale.set(1);
         waterLayer1.addChild(displacementSprite);
         
-        // Lower scale on mobile to improve performance
-        const filterScale = (window.game && window.game.mobileMode) ? 10 : 15;
+        // Lower scale on mobile to improve performance. If adaptive mode is active, disable heavy displacement.
+        const isAdaptive = (window.game && window.game._adaptiveMode) || false;
+        const filterScale = isAdaptive ? 0 : 12;
         const displacementFilter = new PIXI.DisplacementFilter({ sprite: displacementSprite, scale: filterScale });
-        
-        tilingSprite.filters = [displacementFilter];
-        tilingSprite.displacementSprite = displacementSprite;
+
+        if (filterScale > 0) {
+            tilingSprite.filters = [displacementFilter];
+            tilingSprite.displacementSprite = displacementSprite;
+        } else {
+            // Disable displacement to reduce GPU work
+            tilingSprite.filters = null;
+            tilingSprite.displacementSprite = null;
+            displacementSprite.visible = false;
+        }
         
         // Add fish wake effect (drawn dynamically)
         const wakeGraphics = new PIXI.Graphics();
@@ -766,7 +780,7 @@ class River {
         }
     }
     
-    updateWaterfalls(playerPos, viewHeight = 600, viewBuffer = 600) {
+    updateWaterfalls(playerPos, viewHeight = 600, viewBuffer = 600, delta) {
         const viewTop = playerPos.y - viewHeight / 2 - viewBuffer;
         const viewBottom = playerPos.y + viewHeight / 2 + viewBuffer;
         
@@ -776,7 +790,9 @@ class River {
             
             // Only update animation if in view
             if (inView) {
-                waterfall.update();
+                // Use passed-in delta when available so throttled updates advance correctly
+                if (typeof delta !== 'undefined') waterfall.update(delta);
+                else waterfall.update();
             }
             waterfall.recycle(playerPos, index, this.config.height, 800);
         });
