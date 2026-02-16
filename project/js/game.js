@@ -589,12 +589,24 @@ class Game {
             const onTouchStart = (e) => {
                 try {
                     if (!e) return;
-                    e.preventDefault(); e.stopPropagation();
+                    e.preventDefault();
                     const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
                     if (!t) return;
                     const frac = getRelY(t.clientY);
-                    if (frac <= (1/3)) startKey('ArrowUp');
-                    else if (frac >= (2/3)) startKey('ArrowDown');
+                    if (frac <= 0.4) startKey('ArrowUp');
+                    else if (frac >= 0.6) startKey('ArrowDown');
+                } catch (er) {}
+            };
+            // Pointer events may be synthesized from touch events on some devices
+            // Block `pointerdown` as well so the global pointer handlers don't also run.
+            const onPointerDown = (e) => {
+                try {
+                    if (!e) return;
+                    e.preventDefault();
+                    const clientY = (typeof e.clientY === 'number') ? e.clientY : (e.y || 0);
+                    const frac = getRelY(clientY);
+                    if (frac <= 0.4) startKey('ArrowUp');
+                    else if (frac >= 0.6) startKey('ArrowDown');
                 } catch (er) {}
             };
             const onTouchEnd = (e) => { try { if (e) { e.preventDefault(); e.stopPropagation(); } endKeys(); } catch (er) {} };
@@ -602,10 +614,10 @@ class Game {
             const onMouseDown = (e) => {
                 try {
                     if (!e) return;
-                    e.preventDefault(); e.stopPropagation();
+                    e.preventDefault();
                     const frac = getRelY(e.clientY);
-                    if (frac <= (1/3)) startKey('ArrowUp');
-                    else if (frac >= (2/3)) startKey('ArrowDown');
+                    if (frac <= 0.4) startKey('ArrowUp');
+                    else if (frac >= 0.6) startKey('ArrowDown');
                 } catch (er) {}
             };
             const onMouseUp = (e) => { try { if (e) { e.preventDefault(); e.stopPropagation(); } endKeys(); } catch (er) {} };
@@ -619,10 +631,13 @@ class Game {
                 window.addEventListener('touchstart', onTouchStart, { passive: false });
                 window.addEventListener('touchend', onTouchEnd, { passive: false });
             }
+            // Also listen for pointer events to cover browsers that synthesize them
+            try { target.addEventListener('pointerdown', onPointerDown, { passive: false }); } catch (e) { }
+            try { target.addEventListener('pointerup', onTouchEnd, { passive: false }); } catch (e) { }
             target.addEventListener('mousedown', onMouseDown);
             target.addEventListener('mouseup', onMouseUp);
 
-            this._tapZoneListeners = { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp };
+            this._tapZoneListeners = { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp, onPointerDown };
             this._tapZoneListenersAdded = true;
         } catch (e) {
             console.warn('setupTapZones error', e);
@@ -632,9 +647,11 @@ class Game {
     removeTapZones() {
         try {
             if (!this._tapZoneListenersAdded || !this._tapZoneListeners) return;
-            const { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp } = this._tapZoneListeners;
+            const { target, onTouchStart, onTouchEnd, onMouseDown, onMouseUp, onPointerDown } = this._tapZoneListeners;
             try { target.removeEventListener('touchstart', onTouchStart, { passive: false }); } catch (e) { try { window.removeEventListener('touchstart', onTouchStart, { passive: false }); } catch (e) {} }
             try { target.removeEventListener('touchend', onTouchEnd, { passive: false }); } catch (e) { try { window.removeEventListener('touchend', onTouchEnd, { passive: false }); } catch (e) {} }
+            try { target.removeEventListener('pointerdown', onPointerDown, { passive: false }); } catch (e) { try { window.removeEventListener('pointerdown', onPointerDown, { passive: false }); } catch (e) {} }
+            try { target.removeEventListener('pointerup', onTouchEnd, { passive: false }); } catch (e) { try { window.removeEventListener('pointerup', onTouchEnd, { passive: false }); } catch (e) {} }
             try { target.removeEventListener('mousedown', onMouseDown); } catch (e) { }
             try { target.removeEventListener('mouseup', onMouseUp); } catch (e) { }
             this._tapZoneListeners = null;

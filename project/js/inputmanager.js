@@ -88,8 +88,10 @@ window.InputManager.prototype.setup = function() {
             pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
             pointerY = (typeof e.pageY === 'number') ? e.pageY : e.clientY;
         }
-        let x = ((pointerX - rect.left) / rect.width) * canvas.width;
-        let y = ((pointerY - rect.top) / rect.height) * canvas.height;
+        let fracX = ((pointerX - rect.left) / rect.width);
+        let fracY = ((pointerY - rect.top) / rect.height);
+        let x = fracX * canvas.width;
+        let y = fracY * canvas.height;
         self.swipeStartY = y;
         self.swipeStartX = x;
         self.pointerMoved = false;
@@ -98,10 +100,19 @@ window.InputManager.prototype.setup = function() {
         // Deadzone logic
         const playerScreenX = self.getPlayerScreenX();
         const deadzone = 20;
-        if (x < playerScreenX - deadzone) {
-            self.keys['ArrowLeft'] = true;
-        } else if (x > playerScreenX + deadzone) {
-            self.keys['ArrowRight'] = true;
+        // If touch started in the upper third, prefer spatial thirds to decide lateral taps
+        if (fracY <= 0.4) {
+            if (fracX < 0.33) {
+                self.keys['ArrowLeft'] = true;
+            } else if (fracX > 0.66) {
+                self.keys['ArrowRight'] = true;
+            }
+        } else {
+            if (x < playerScreenX - deadzone) {
+                self.keys['ArrowLeft'] = true;
+            } else if (x > playerScreenX + deadzone) {
+                self.keys['ArrowRight'] = true;
+            }
         }
     };
     
@@ -117,16 +128,26 @@ window.InputManager.prototype.setup = function() {
             pointerX = (typeof e.pageX === 'number') ? e.pageX : e.clientX;
             pointerY = (typeof e.pageY === 'number') ? e.pageY : e.clientY;
         }
-        let x = ((pointerX - rect.left) / rect.width) * canvas.width;
+        let fracX = ((pointerX - rect.left) / rect.width);
+        let fracY = ((pointerY - rect.top) / rect.height);
+        let x = fracX * canvas.width;
         self.pointerX = x;
         self.keys['ArrowLeft'] = false;
         self.keys['ArrowRight'] = false;
         const playerScreenX = self.getPlayerScreenX();
         const deadzone = 20;
-        if (x < playerScreenX - deadzone) {
-            self.keys['ArrowLeft'] = true;
-        } else if (x > playerScreenX + deadzone) {
-            self.keys['ArrowRight'] = true;
+        if (fracY <= 0.4) {
+            if (fracX < 0.33) {
+                self.keys['ArrowLeft'] = true;
+            } else if (fracX > 0.66) {
+                self.keys['ArrowRight'] = true;
+            }
+        } else {
+            if (x < playerScreenX - deadzone) {
+                self.keys['ArrowLeft'] = true;
+            } else if (x > playerScreenX + deadzone) {
+                self.keys['ArrowRight'] = true;
+            }
         }
         if ((self.keys['ArrowLeft'] && playerScreenX <= x) || (self.keys['ArrowRight'] && playerScreenX >= x)) {
             self.keys['ArrowLeft'] = false;
