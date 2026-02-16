@@ -11,7 +11,7 @@ class Preloader {
         const waterCirclesJsonPath = 'assets/generated/water_circles.json';
         if (!preloaderInstance.resources.some(r => r.url === waterCirclesJsonPath)) preloaderInstance.add('spritesheet', waterCirclesJsonPath, 'water_circles');
     }
-    static cache = {};
+    // NOTE: single `cache` defined below; removed duplicate declaration
 
     constructor() {
         this.resources = [];
@@ -42,26 +42,51 @@ class Preloader {
             }
             let promise;
             if (res.type === 'spritesheet') {
-                if (
-                    (res.name && res.name.toLowerCase().includes('foam')) &&
-                    (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.json'))
-                ) foamSplashJson = res;
-                if (
-                    (res.name && res.name.toLowerCase().includes('foam')) &&
-                    (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.png'))
-                ) foamSplashPng = res;
-                if (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.json')) foamSplashJson = res;
-                if (res.url && res.url.toLowerCase().endsWith('foam_splash_particles.png')) foamSplashPng = res;
-                if (
-                    (res.name && res.name.toLowerCase().includes('water_circles')) &&
-                    (res.url && res.url.toLowerCase().endsWith('water_circles.json'))
-                ) waterCirclesJson = res;
-                if (
-                    (res.name && res.name.toLowerCase().includes('water_circles')) &&
-                    (res.url && res.url.toLowerCase().endsWith('water_circles.png'))
-                ) waterCirclesPng = res;
-                if (res.url && res.url.toLowerCase().endsWith('water_circles.json')) waterCirclesJson = res;
-                if (res.url && res.url.toLowerCase().endsWith('water_circles.png')) waterCirclesPng = res;
+                const u = (res.url || '').toLowerCase();
+                if (u.endsWith('foam_splash_particles.json') || (res.name && res.name.toLowerCase().includes('foam') && u.endsWith('.json'))) foamSplashJson = res;
+                if (u.endsWith('foam_splash_particles.png') || (res.name && res.name.toLowerCase().includes('foam') && u.endsWith('.png'))) foamSplashPng = res;
+                if (u.endsWith('water_circles.json') || (res.name && res.name.toLowerCase().includes('water_circles') && u.endsWith('.json'))) waterCirclesJson = res;
+                if (u.endsWith('water_circles.png') || (res.name && res.name.toLowerCase().includes('water_circles') && u.endsWith('.png'))) waterCirclesPng = res;
+
+                // For non-special spritesheets, queue loading of json + image so missing files are reported
+                if (!foamSplashJson && !foamSplashPng && !waterCirclesJson && !waterCirclesPng) {
+                    const isJson = u.endsWith('.json');
+                    const jsonUrl = isJson ? res.url : (res.url ? res.url.replace(/\.png$/i, '.json') : null);
+                    const pngUrl = isJson ? (res.url ? res.url.replace(/\.json$/i, '.png') : null) : res.url;
+                    const key = res.name || res.url;
+                    const sprPromise = (async () => {
+                        try {
+                            if (jsonUrl) {
+                                const r = await fetch(jsonUrl);
+                                if (!r.ok) {
+                                    console.error('[Preloader] Failed to fetch spritesheet JSON', jsonUrl, r.status);
+                                    loaded[key + ':json'] = null;
+                                    Preloader.cache[key + ':json'] = null;
+                                } else {
+                                    const j = await r.json();
+                                    loaded[key + ':json'] = j;
+                                    Preloader.cache[key + ':json'] = j;
+                                }
+                            }
+                        } catch (err) {
+                            console.error('[Preloader] Exception fetching spritesheet JSON', jsonUrl, err);
+                            loaded[key + ':json'] = null;
+                            Preloader.cache[key + ':json'] = null;
+                        }
+                        try {
+                            if (pngUrl) {
+                                const t = await PIXI.Assets.load(pngUrl).catch(e => { throw e; });
+                                loaded[key + ':png'] = t;
+                                Preloader.cache[key + ':png'] = t;
+                            }
+                        } catch (err) {
+                            console.error('[Preloader] Exception loading spritesheet image', pngUrl, err);
+                            loaded[key + ':png'] = null;
+                            Preloader.cache[key + ':png'] = null;
+                        }
+                    })();
+                    this.promises.push(sprPromise);
+                }
                 continue;
             }
             switch (res.type) {
